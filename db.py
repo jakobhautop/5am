@@ -99,6 +99,11 @@ def update_status(connection: sqlite3.Connection, todo_id: int, status: str) -> 
     connection.commit()
 
 
+def delete_todo(connection: sqlite3.Connection, todo_id: int) -> None:
+    connection.execute("DELETE FROM todos WHERE id = ?", (todo_id,))
+    connection.commit()
+
+
 def list_completed_counts_by_day(
     connection: sqlite3.Connection, days: int = 14
 ) -> list[int]:

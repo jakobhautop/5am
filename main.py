@@ -6,7 +6,14 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Input, Label, ListItem, ListView, Sparkline
 
-from db import add_todo, connect_db, list_completed_counts_by_day, list_todos, update_status
+from db import (
+    add_todo,
+    connect_db,
+    delete_todo,
+    list_completed_counts_by_day,
+    list_todos,
+    update_status,
+)
 
 
 class TodoListItem(ListItem):
@@ -87,6 +94,7 @@ class TodoApp(App):
         ("j", "move_down", "Move down"),
         ("k", "move_up", "Move up"),
         ("f", "flip_state", "Flip state"),
+        ("d", "delete_item", "Delete item"),
         ("n", "new_task", "New task"),
     ]
 
@@ -107,7 +115,10 @@ class TodoApp(App):
             yield Label("Completed per day", id="sparkline-title")
             yield Sparkline(id="completed-sparkline")
         yield Input(placeholder="New task…", id="new-task-input")
-        yield Label("h/l switch lists  •  j/k move  •  f flip item  •  n new task", id="footer-help")
+        yield Label(
+            "h/l switch lists  •  j/k move  •  f flip item  •  d delete item  •  n new task",
+            id="footer-help",
+        )
 
     def on_mount(self) -> None:
         self.refresh_lists()
@@ -173,6 +184,15 @@ class TodoApp(App):
             return
         new_status = "done" if item.status == "todo" else "todo"
         update_status(self.connection, item.todo_id, new_status)
+        self.refresh_lists()
+        list_view.focus()
+
+    def action_delete_item(self) -> None:
+        list_view = self.get_active_list()
+        item = self.get_highlighted_item(list_view)
+        if not item:
+            return
+        delete_todo(self.connection, item.todo_id)
         self.refresh_lists()
         list_view.focus()
 
