@@ -4,9 +4,10 @@ from typing import Optional
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Label, ListItem, ListView
+from textual.screen import ModalScreen
+from textual.widgets import Input, Label, ListItem, ListView
 
-from db import connect_db, list_todos, update_status
+from db import add_todo, connect_db, list_todos, update_status
 
 
 class TodoListItem(ListItem):
@@ -16,21 +17,84 @@ class TodoListItem(ListItem):
         self.status = status
 
 
+class NewTaskScreen(ModalScreen[Optional[str]]):
+    CSS = """
+    NewTaskScreen {
+        align: center middle;
+    }
+    #dialog {
+        width: 60%;
+        max-width: 60;
+        border: solid #3a3a3a;
+        background: #0b0b0b;
+        padding: 1 2;
+    }
+    #dialog Label {
+        color: #c0c0c0;
+        padding-bottom: 1;
+    }
+    #dialog Input {
+        border: solid #3a3a3a;
+    }
+    """
+
+    BINDINGS = [
+        ("escape", "cancel", "Cancel"),
+        ("enter", "submit", "Create task"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Label("New task")
+            yield Input(placeholder="Describe the task...")
+
+    def on_mount(self) -> None:
+        self.query_one(Input).focus()
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    def action_submit(self) -> None:
+        text = self.query_one(Input).value.strip()
+        self.dismiss(text or None)
+
+
 class TodoApp(App):
     CSS = """
+    Screen {
+        background: #0b0b0b;
+        color: #d0d0d0;
+    }
     #lists {
         height: 1fr;
     }
     .pane {
         width: 1fr;
-        padding: 1 2;
+        padding: 0 1;
     }
     .pane ListView {
         height: 1fr;
-        border: round $accent;
+        border: solid #3a3a3a;
+    }
+    .pane ListView:focus {
+        border: solid #5f5f5f;
     }
     .title {
-        padding-bottom: 1;
+        padding: 0 1;
+        color: #a0a0a0;
+    }
+    ListView > ListItem {
+        padding: 0 1;
+    }
+    ListView > ListItem.--highlight {
+        background: #2a2a2a;
+        color: #f0f0f0;
+    }
+    #footer-help {
+        height: 1;
+        background: #111111;
+        color: #c0c0c0;
+        padding: 0 1;
     }
     """
 
@@ -40,6 +104,7 @@ class TodoApp(App):
         ("j", "move_down", "Move down"),
         ("k", "move_up", "Move up"),
         ("f", "flip_state", "Flip state"),
+        ("n", "new_task", "New task"),
     ]
 
     def __init__(self) -> None:
@@ -54,6 +119,7 @@ class TodoApp(App):
             with Vertical(classes="pane"):
                 yield Label("Done", classes="title")
                 yield ListView(id="done-list")
+        yield Label("h/l switch lists  •  j/k move  •  f flip item  •  n new task", id="footer-help")
 
     def on_mount(self) -> None:
         self.refresh_lists()
@@ -116,6 +182,16 @@ class TodoApp(App):
         update_status(self.connection, item.todo_id, new_status)
         self.refresh_lists()
         list_view.focus()
+
+    def action_new_task(self) -> None:
+        self.push_screen(NewTaskScreen(), self.handle_new_task)
+
+    def handle_new_task(self, text: Optional[str]) -> None:
+        if not text:
+            return
+        add_todo(self.connection, text)
+        self.refresh_lists()
+        self.query_one("#todo-list", ListView).focus()
 
 
 def main() -> None:
