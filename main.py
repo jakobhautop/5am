@@ -37,6 +37,7 @@ class TodoApp(App):
         color: #f0f0f0;
         text-style: bold;
         text-align: center;
+        width: 100%;
     }
     .pane {
         width: 1fr;
@@ -59,6 +60,7 @@ class TodoApp(App):
     #sparkline-panel {
         height: 1fr;
         padding: 0 1;
+        margin-top: 1;
     }
     #sparkline-title {
         text-align: center;
@@ -79,6 +81,7 @@ class TodoApp(App):
     #new-task-input {
         margin: 0 1;
         border: solid #3a3a3a;
+        background: transparent;
     }
     #footer-help {
         height: 1;
