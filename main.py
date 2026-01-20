@@ -4,7 +4,6 @@ from typing import Optional
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Input, Label, ListItem, ListView
 
 from db import add_todo, connect_db, list_todos, update_status
@@ -17,48 +16,6 @@ class TodoListItem(ListItem):
         self.status = status
 
 
-class NewTaskScreen(ModalScreen[Optional[str]]):
-    CSS = """
-    NewTaskScreen {
-        align: center middle;
-    }
-    #dialog {
-        width: 60%;
-        max-width: 60;
-        border: solid #3a3a3a;
-        background: #0b0b0b;
-        padding: 1 2;
-    }
-    #dialog Label {
-        color: #c0c0c0;
-        padding-bottom: 1;
-    }
-    #dialog Input {
-        border: solid #3a3a3a;
-    }
-    """
-
-    BINDINGS = [
-        ("escape", "cancel", "Cancel"),
-        ("enter", "submit", "Create task"),
-    ]
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="dialog"):
-            yield Label("New task")
-            yield Input(placeholder="Describe the task...")
-
-    def on_mount(self) -> None:
-        self.query_one(Input).focus()
-
-    def action_cancel(self) -> None:
-        self.dismiss(None)
-
-    def action_submit(self) -> None:
-        text = self.query_one(Input).value.strip()
-        self.dismiss(text or None)
-
-
 class TodoApp(App):
     CSS = """
     Screen {
@@ -68,6 +25,11 @@ class TodoApp(App):
     #lists {
         height: 1fr;
     }
+    #app-title {
+        padding: 1 1 0 1;
+        color: #f0f0f0;
+        text-style: bold;
+    }
     .pane {
         width: 1fr;
         padding: 0 1;
@@ -75,6 +37,7 @@ class TodoApp(App):
     .pane ListView {
         height: 1fr;
         border: solid #3a3a3a;
+        background: transparent;
     }
     .pane ListView:focus {
         border: solid #5f5f5f;
@@ -87,12 +50,17 @@ class TodoApp(App):
         padding: 0 1;
     }
     ListView > ListItem.--highlight {
-        background: #2a2a2a;
+        background: transparent;
         color: #f0f0f0;
+        text-style: bold;
+    }
+    #new-task-input {
+        margin: 0 1;
+        border: solid #3a3a3a;
     }
     #footer-help {
         height: 1;
-        background: #111111;
+        background: transparent;
         color: #c0c0c0;
         padding: 0 1;
     }
@@ -112,6 +80,7 @@ class TodoApp(App):
         self.connection = connect_db()
 
     def compose(self) -> ComposeResult:
+        yield Label("5am", id="app-title")
         with Horizontal(id="lists"):
             with Vertical(classes="pane"):
                 yield Label("Todo", classes="title")
@@ -119,6 +88,7 @@ class TodoApp(App):
             with Vertical(classes="pane"):
                 yield Label("Done", classes="title")
                 yield ListView(id="done-list")
+        yield Input(placeholder="New task…", id="new-task-input")
         yield Label("h/l switch lists  •  j/k move  •  f flip item  •  n new task", id="footer-help")
 
     def on_mount(self) -> None:
@@ -184,12 +154,16 @@ class TodoApp(App):
         list_view.focus()
 
     def action_new_task(self) -> None:
-        self.push_screen(NewTaskScreen(), self.handle_new_task)
+        self.query_one("#new-task-input", Input).focus()
 
-    def handle_new_task(self, text: Optional[str]) -> None:
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id != "new-task-input":
+            return
+        text = event.value.strip()
         if not text:
             return
         add_todo(self.connection, text)
+        event.input.value = ""
         self.refresh_lists()
         self.query_one("#todo-list", ListView).focus()
 
