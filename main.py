@@ -4,9 +4,9 @@ from typing import Optional
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Input, Label, ListItem, ListView
+from textual.widgets import Input, Label, ListItem, ListView, Sparkline
 
-from db import add_todo, connect_db, list_todos, update_status
+from db import add_todo, connect_db, list_completed_counts_by_day, list_todos, update_status
 
 
 class TodoListItem(ListItem):
@@ -23,12 +23,13 @@ class TodoApp(App):
         color: #d0d0d0;
     }
     #lists {
-        height: 1fr;
+        height: 2fr;
     }
     #app-title {
         padding: 1 1 0 1;
         color: #f0f0f0;
         text-style: bold;
+        text-align: center;
     }
     .pane {
         width: 1fr;
@@ -45,6 +46,20 @@ class TodoApp(App):
     .title {
         padding: 0 1;
         color: #a0a0a0;
+        text-align: center;
+        width: 100%;
+    }
+    #sparkline-panel {
+        height: 1fr;
+        padding: 0 1;
+    }
+    #sparkline-title {
+        text-align: center;
+        color: #a0a0a0;
+        width: 100%;
+    }
+    #completed-sparkline {
+        height: 1fr;
     }
     ListView > ListItem {
         padding: 0 1;
@@ -88,6 +103,9 @@ class TodoApp(App):
             with Vertical(classes="pane"):
                 yield Label("Done", classes="title")
                 yield ListView(id="done-list")
+        with Vertical(id="sparkline-panel"):
+            yield Label("Completed per day", id="sparkline-title")
+            yield Sparkline(id="completed-sparkline")
         yield Input(placeholder="New task…", id="new-task-input")
         yield Label("h/l switch lists  •  j/k move  •  f flip item  •  n new task", id="footer-help")
 
@@ -104,6 +122,11 @@ class TodoApp(App):
             todo_list.append(TodoListItem(record.todo_id, record.text, record.status))
         for record in list_todos(self.connection, "done"):
             done_list.append(TodoListItem(record.todo_id, record.text, record.status))
+        self.refresh_sparkline()
+
+    def refresh_sparkline(self) -> None:
+        sparkline = self.query_one("#completed-sparkline", Sparkline)
+        sparkline.data = list_completed_counts_by_day(self.connection)
 
     def get_active_list(self) -> ListView:
         focused = self.focused

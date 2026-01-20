@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -79,3 +79,28 @@ def update_status(connection: sqlite3.Connection, todo_id: int, status: str) -> 
         (status, todo_id),
     )
     connection.commit()
+
+
+def list_completed_counts_by_day(
+    connection: sqlite3.Connection, days: int = 14
+) -> list[int]:
+    today = datetime.now(tz=timezone.utc).date()
+    start_day = today - timedelta(days=days - 1)
+    start_timestamp = datetime.combine(
+        start_day, datetime.min.time(), tzinfo=timezone.utc
+    ).isoformat()
+    rows = connection.execute(
+        """
+        SELECT date(timestamp) AS day, COUNT(*) AS total
+        FROM todos
+        WHERE status = 'done' AND timestamp >= ?
+        GROUP BY day
+        ORDER BY day
+        """,
+        (start_timestamp,),
+    ).fetchall()
+    totals_by_day = {row["day"]: row["total"] for row in rows}
+    return [
+        totals_by_day.get((start_day + timedelta(days=offset)).isoformat(), 0)
+        for offset in range(days)
+    ]
