@@ -45,6 +45,18 @@ def initialize_db(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS focus_time (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            todo_id INTEGER NOT NULL,
+            focus_date TEXT NOT NULL,
+            seconds INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(todo_id, focus_date),
+            FOREIGN KEY(todo_id) REFERENCES todos(id) ON DELETE CASCADE
+        )
+        """
+    )
     ensure_completed_timestamp_column(connection)
     connection.commit()
 
@@ -125,5 +137,44 @@ def list_completed_counts_by_day(
     totals_by_day = {row["day"]: row["total"] for row in rows}
     return [
         totals_by_day.get((start_day + timedelta(days=offset)).isoformat(), 0)
+        for offset in range(days)
+    ]
+
+
+def add_focus_seconds(
+    connection: sqlite3.Connection, todo_id: int, seconds: int
+) -> None:
+    focus_date = datetime.now(tz=timezone.utc).date().isoformat()
+    connection.execute(
+        """
+        INSERT INTO focus_time (todo_id, focus_date, seconds)
+        VALUES (?, ?, ?)
+        ON CONFLICT(todo_id, focus_date)
+        DO UPDATE SET seconds = seconds + excluded.seconds
+        """,
+        (todo_id, focus_date, seconds),
+    )
+    connection.commit()
+
+
+def list_focus_minutes_by_day(
+    connection: sqlite3.Connection, days: int = 14
+) -> list[int]:
+    today = datetime.now(tz=timezone.utc).date()
+    start_day = today - timedelta(days=days - 1)
+    start_date = start_day.isoformat()
+    rows = connection.execute(
+        """
+        SELECT focus_date AS day, SUM(seconds) AS total_seconds
+        FROM focus_time
+        WHERE focus_date >= ?
+        GROUP BY day
+        ORDER BY day
+        """,
+        (start_date,),
+    ).fetchall()
+    totals_by_day = {row["day"]: row["total_seconds"] for row in rows}
+    return [
+        int(totals_by_day.get((start_day + timedelta(days=offset)).isoformat(), 0) // 60)
         for offset in range(days)
     ]
