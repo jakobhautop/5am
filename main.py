@@ -6,7 +6,7 @@ from time import monotonic
 from typing import Optional
 
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Input, Label, ListItem, ListView, Sparkline
 
@@ -106,13 +106,18 @@ class TodoApp(App):
         width: 1fr;
         padding: 0 1;
     }
-    .pane ListView {
+    .pane-box {
         height: 1fr;
         border: solid #3a3a3a;
         background: transparent;
     }
-    .pane ListView:focus {
+    .pane-box:focus-within {
         border: solid #5f5f5f;
+    }
+    .pane ListView {
+        height: 1fr;
+        border: none;
+        background: transparent;
     }
     .title {
         padding: 0 1;
@@ -125,21 +130,19 @@ class TodoApp(App):
         padding: 0 1;
         margin-top: 1;
     }
-    .sparkline-title {
-        text-align: center;
+    .sparkline-group {
+        height: 1fr;
+        background: transparent;
+    }
+    .sparkline-group Sparkline {
+        height: 1fr;
+    }
+    .sparkline-legend {
+        dock: bottom;
+        height: 1;
+        padding: 0 1;
+        text-align: left;
         color: #a0a0a0;
-        width: 100%;
-    }
-    #completed-sparkline {
-        height: 1fr;
-        margin-top: 1;
-    }
-    #created-sparkline {
-        height: 1fr;
-    }
-    #focus-sparkline {
-        height: 1fr;
-        margin-top: 1;
     }
     #focus-modal {
         width: 60%;
@@ -215,21 +218,26 @@ class TodoApp(App):
         yield Label("5am", id="app-title")
         with Horizontal(id="lists"):
             with Vertical(classes="pane"):
-                yield Label("Todo", classes="title")
-                yield ListView(id="todo-list")
+                with Vertical(classes="pane-box"):
+                    yield Label("Todo", classes="title")
+                    yield ListView(id="todo-list")
             with Vertical(classes="pane"):
-                yield Label("Done", classes="title")
-                yield ListView(id="done-list")
+                with Vertical(classes="pane-box"):
+                    yield Label("Done", classes="title")
+                    yield ListView(id="done-list")
         with Vertical(id="sparkline-panel"):
-            yield Label("Created per day", classes="sparkline-title")
-            yield Sparkline(id="created-sparkline")
-            yield Label("Completed per day", classes="sparkline-title")
-            yield Sparkline(id="completed-sparkline")
-            yield Label("Focus minutes per day", classes="sparkline-title")
-            yield Sparkline(id="focus-sparkline")
+            with Container(classes="sparkline-group"):
+                yield Sparkline(id="created-sparkline")
+                yield Label("Created per day", classes="sparkline-legend")
+            with Container(classes="sparkline-group"):
+                yield Sparkline(id="completed-sparkline")
+                yield Label("Completed per day", classes="sparkline-legend")
+            with Container(classes="sparkline-group"):
+                yield Sparkline(id="focus-sparkline")
+                yield Label("Focus minutes per day", classes="sparkline-legend")
         yield Input(placeholder="New task…", id="new-task-input")
         yield Label(
-            "h/l switch lists  •  j/k move  •  0 clear priority  •  1-9 priority  •  o order  •  f flip item  •  e edit item  •  t focus time  •  c child  •  p parent  •  d delete item  •  n new task",
+            "h/j/k/l move, 0-9 prio, o order, f flip, e edit, t time, c child, p parent, d delete",
             id="footer-help",
         )
 
