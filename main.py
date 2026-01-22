@@ -46,9 +46,9 @@ class FocusModal(ModalScreen[int]):
 
     def on_mount(self) -> None:
         self._start = self.app.time
-        self._timer = self.set_interval(1, self._update_timer)
+        self._timer = self.set_interval(1, self._update_focus_timer)
 
-    def _update_timer(self) -> None:
+    def _update_focus_timer(self) -> None:
         elapsed = int(self.app.time - self._start)
         timer_label = self.query_one("#focus-modal-timer", Label)
         timer_label.update(str(timedelta(seconds=elapsed)))
