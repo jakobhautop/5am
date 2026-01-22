@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from time import monotonic
 from typing import Optional
 
 from textual.app import App, ComposeResult
@@ -168,6 +169,10 @@ class TodoApp(App):
         super().__init__()
         self.connection = connect_db()
         self.focus_session: Optional[tuple[int, float, str]] = None
+
+    @property
+    def time(self) -> float:
+        return monotonic()
 
     def compose(self) -> ComposeResult:
         yield Label("5am", id="app-title")
