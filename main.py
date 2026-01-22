@@ -259,9 +259,9 @@ class TodoApp(App):
     def build_display_items(self, status: str) -> list[tuple[TodoRecord, int]]:
         records = list_todos(self.connection, status)
         if status == "todo" and self.priority_order:
-            def flat_sort_key(item) -> tuple[float, float, int]:
+            def flat_sort_key(item) -> tuple[float, str, int]:
                 priority_value = float(item.priority) if item.priority is not None else 99.0
-                return (priority_value, item.sort_order, item.todo_id)
+                return (priority_value, item.timestamp, item.todo_id)
 
             ordered = sorted(records, key=flat_sort_key)
             return [(record, 0) for record in ordered]
@@ -274,8 +274,8 @@ class TodoApp(App):
             else:
                 roots.append(record)
 
-        def sort_key(item) -> tuple[float, float, int]:
-            return (item.sort_order, item.todo_id, item.todo_id)
+        def sort_key(item) -> tuple[str, int]:
+            return (item.timestamp, item.todo_id)
 
         roots.sort(key=sort_key)
         for children in children_map.values():
