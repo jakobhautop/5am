@@ -333,6 +333,8 @@ class TodoApp(App):
         self.priority_order = not self.priority_order
         focused = self.focused
         focus_id = focused.id if hasattr(focused, "id") else "#todo-list"
+        if focus_id and not focus_id.startswith("#"):
+            focus_id = f"#{focus_id}"
         self.refresh_lists()
         self.query_one(focus_id, ListView).focus()
 
