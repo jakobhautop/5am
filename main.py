@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Optional
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.screen import ModalScreen
 from textual.widgets import Input, Label, ListItem, ListView, Sparkline
 
 from db import (
     add_todo,
+    add_focus_seconds,
     connect_db,
     delete_todo,
     list_completed_counts_by_day,
+    list_focus_minutes_by_day,
     list_todos,
     update_status,
 )
@@ -21,6 +25,38 @@ class TodoListItem(ListItem):
         super().__init__(Label(text))
         self.todo_id = todo_id
         self.status = status
+        self.text = text
+
+
+class FocusModal(ModalScreen[int]):
+    BINDINGS = [("t", "stop_focus", "Stop focus")]
+
+    def __init__(self, todo_text: str) -> None:
+        super().__init__()
+        self.todo_text = todo_text
+        self._start = self.app.time
+        self._timer = None
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="focus-modal"):
+            yield Label("Focus", id="focus-modal-title")
+            yield Label(self.todo_text, id="focus-modal-text")
+            yield Label("00:00:00", id="focus-modal-timer")
+
+    def on_mount(self) -> None:
+        self._start = self.app.time
+        self._timer = self.set_interval(1, self._update_timer)
+
+    def _update_timer(self) -> None:
+        elapsed = int(self.app.time - self._start)
+        timer_label = self.query_one("#focus-modal-timer", Label)
+        timer_label.update(str(timedelta(seconds=elapsed)))
+
+    def action_stop_focus(self) -> None:
+        elapsed = int(self.app.time - self._start)
+        if self._timer:
+            self._timer.stop()
+        self.dismiss(elapsed)
 
 
 class TodoApp(App):
@@ -62,13 +98,39 @@ class TodoApp(App):
         padding: 0 1;
         margin-top: 1;
     }
-    #sparkline-title {
+    .sparkline-title {
         text-align: center;
         color: #a0a0a0;
         width: 100%;
     }
     #completed-sparkline {
         height: 1fr;
+    }
+    #focus-sparkline {
+        height: 1fr;
+        margin-top: 1;
+    }
+    #focus-modal {
+        align: center middle;
+        width: 60%;
+        padding: 1 2;
+        border: heavy #5f5f5f;
+        background: #0f0f0f;
+    }
+    #focus-modal-title {
+        text-align: center;
+        text-style: bold;
+        color: #f0f0f0;
+        margin-bottom: 1;
+    }
+    #focus-modal-text {
+        text-align: center;
+        color: #d0d0d0;
+        margin-bottom: 1;
+    }
+    #focus-modal-timer {
+        text-align: center;
+        color: #a0a0a0;
     }
     ListView > ListItem {
         padding: 0 1;
@@ -98,12 +160,14 @@ class TodoApp(App):
         ("k", "move_up", "Move up"),
         ("f", "flip_state", "Flip state"),
         ("d", "delete_item", "Delete item"),
+        ("t", "focus_task", "Focus task"),
         ("n", "new_task", "New task"),
     ]
 
     def __init__(self) -> None:
         super().__init__()
         self.connection = connect_db()
+        self.focus_session: Optional[tuple[int, float, str]] = None
 
     def compose(self) -> ComposeResult:
         yield Label("5am", id="app-title")
@@ -115,11 +179,13 @@ class TodoApp(App):
                 yield Label("Done", classes="title")
                 yield ListView(id="done-list")
         with Vertical(id="sparkline-panel"):
-            yield Label("Completed per day", id="sparkline-title")
+            yield Label("Completed per day", classes="sparkline-title")
             yield Sparkline(id="completed-sparkline")
+            yield Label("Focus minutes per day", classes="sparkline-title")
+            yield Sparkline(id="focus-sparkline")
         yield Input(placeholder="New task…", id="new-task-input")
         yield Label(
-            "h/l switch lists  •  j/k move  •  f flip item  •  d delete item  •  n new task",
+            "h/l switch lists  •  j/k move  •  f flip item  •  t focus time  •  d delete item  •  n new task",
             id="footer-help",
         )
 
@@ -141,6 +207,8 @@ class TodoApp(App):
     def refresh_sparkline(self) -> None:
         sparkline = self.query_one("#completed-sparkline", Sparkline)
         sparkline.data = list_completed_counts_by_day(self.connection)
+        focus_sparkline = self.query_one("#focus-sparkline", Sparkline)
+        focus_sparkline.data = list_focus_minutes_by_day(self.connection)
 
     def get_active_list(self) -> ListView:
         focused = self.focused
@@ -201,6 +269,43 @@ class TodoApp(App):
 
     def action_new_task(self) -> None:
         self.query_one("#new-task-input", Input).focus()
+
+    def action_focus_task(self) -> None:
+        list_view = self.get_active_list()
+        item = self.get_highlighted_item(list_view)
+        if not item or item.status != "todo":
+            return
+        if self.focus_session and self.focus_session[0] != item.todo_id:
+            self._record_focus_session()
+        if self.focus_session and self.focus_session[0] == item.todo_id:
+            self._record_focus_session()
+            return
+        self.focus_session = (item.todo_id, self.time, item.text)
+        self.push_screen(
+            FocusModal(item.text),
+            callback=self._handle_focus_complete,
+        )
+
+    def _record_focus_session(self) -> None:
+        if not self.focus_session:
+            return
+        todo_id, start_time, _text = self.focus_session
+        elapsed = int(self.time - start_time)
+        if elapsed > 0:
+            add_focus_seconds(self.connection, todo_id, elapsed)
+            self.refresh_sparkline()
+        self.focus_session = None
+
+    def _handle_focus_complete(self, elapsed: int | None) -> None:
+        if not self.focus_session:
+            return
+        todo_id, start_time, _text = self.focus_session
+        if elapsed is None:
+            elapsed = int(self.time - start_time)
+        if elapsed > 0:
+            add_focus_seconds(self.connection, todo_id, elapsed)
+        self.focus_session = None
+        self.refresh_sparkline()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id != "new-task-input":
