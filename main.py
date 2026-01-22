@@ -21,18 +21,23 @@ from db import (
     TodoRecord,
     update_status,
     update_parent,
+    update_priority,
 )
 
 
 class TodoListItem(ListItem):
     def __init__(self, record: TodoRecord, depth: int) -> None:
         indent = "  " * depth
-        super().__init__(Label(f"{indent}{record.text}"))
+        priority_label = (
+            f"{record.priority}".rjust(2) if record.priority is not None else "  "
+        )
+        super().__init__(Label(f"{indent}{priority_label} {record.text}"))
         self.todo_id = record.todo_id
         self.status = record.status
         self.text = record.text
         self.parent_id = record.parent_id
         self.sort_order = record.sort_order
+        self.priority = record.priority
         self.depth = depth
 
 
@@ -183,6 +188,7 @@ class TodoApp(App):
         ("c", "new_child_task", "New child task"),
         ("p", "new_parent_task", "New parent task"),
         ("n", "new_task", "New task"),
+        ("o", "toggle_priority_order", "Toggle priority order"),
     ]
 
     def __init__(self) -> None:
@@ -191,6 +197,7 @@ class TodoApp(App):
         self.focus_session: Optional[tuple[int, float, str]] = None
         self.pending_task: PendingTask | None = None
         self.default_placeholder = "New task…"
+        self.priority_order = False
 
     @property
     def time(self) -> float:
@@ -212,7 +219,7 @@ class TodoApp(App):
             yield Sparkline(id="focus-sparkline")
         yield Input(placeholder="New task…", id="new-task-input")
         yield Label(
-            "h/l switch lists  •  j/k move  •  f flip item  •  t focus time  •  c child  •  p parent  •  d delete item  •  n new task",
+            "h/l switch lists  •  j/k move  •  1-9 priority  •  o order  •  f flip item  •  t focus time  •  c child  •  p parent  •  d delete item  •  n new task",
             id="footer-help",
         )
 
@@ -233,6 +240,13 @@ class TodoApp(App):
 
     def build_display_items(self, status: str) -> list[tuple[TodoRecord, int]]:
         records = list_todos(self.connection, status)
+        if status == "todo" and self.priority_order:
+            def flat_sort_key(item) -> tuple[float, float, int]:
+                priority_value = float(item.priority) if item.priority is not None else 99.0
+                return (priority_value, item.sort_order, item.todo_id)
+
+            ordered = sorted(records, key=flat_sort_key)
+            return [(record, 0) for record in ordered]
         record_by_id = {record.todo_id: record for record in records}
         children_map: dict[int, list] = {record.todo_id: [] for record in records}
         roots = []
@@ -242,8 +256,8 @@ class TodoApp(App):
             else:
                 roots.append(record)
 
-        def sort_key(item) -> tuple[float, int]:
-            return (item.sort_order, item.todo_id)
+        def sort_key(item) -> tuple[float, float, int]:
+            return (item.sort_order, item.todo_id, item.todo_id)
 
         roots.sort(key=sort_key)
         for children in children_map.values():
@@ -314,6 +328,13 @@ class TodoApp(App):
         move = getattr(list_view, "action_cursor_up", None)
         if move:
             move()
+
+    def action_toggle_priority_order(self) -> None:
+        self.priority_order = not self.priority_order
+        focused = self.focused
+        focus_id = focused.id if hasattr(focused, "id") else "#todo-list"
+        self.refresh_lists()
+        self.query_one(focus_id, ListView).focus()
 
     def action_flip_state(self) -> None:
         list_view = self.get_active_list()
@@ -472,6 +493,24 @@ class TodoApp(App):
         event.input.value = ""
         self.refresh_lists()
         self.query_one(focus_list_id, ListView).focus()
+
+    def on_key(self, event) -> None:
+        if isinstance(self.focused, Input):
+            return
+        if event.key in {"1", "2", "3", "4", "5", "6", "7", "8", "9"}:
+            list_view = self.get_active_list()
+            if list_view.id != "todo-list":
+                return
+            item = self.get_highlighted_item(list_view)
+            if not item:
+                return
+            update_priority(self.connection, item.todo_id, int(event.key))
+            index = self.get_highlighted_index(list_view)
+            self.refresh_lists()
+            refreshed_list = self.query_one("#todo-list", ListView)
+            if index is not None and refreshed_list.children:
+                refreshed_list.index = min(index, len(refreshed_list.children) - 1)
+            refreshed_list.focus()
 
 
 def main() -> None:

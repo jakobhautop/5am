@@ -16,6 +16,7 @@ class TodoRecord:
     status: str
     parent_id: int | None
     sort_order: float
+    priority: int | None
 
 
 def get_db_path() -> Path:
@@ -47,6 +48,7 @@ def initialize_db(connection: sqlite3.Connection) -> None:
             completed_timestamp TEXT,
             parent_id INTEGER,
             sort_order REAL,
+            priority INTEGER,
             FOREIGN KEY(parent_id) REFERENCES todos(id) ON DELETE SET NULL
         )
         """
@@ -66,6 +68,7 @@ def initialize_db(connection: sqlite3.Connection) -> None:
     ensure_completed_timestamp_column(connection)
     ensure_parent_id_column(connection)
     ensure_sort_order_column(connection)
+    ensure_priority_column(connection)
     connection.commit()
 
 
@@ -99,10 +102,20 @@ def ensure_sort_order_column(connection: sqlite3.Connection) -> None:
     connection.execute("UPDATE todos SET sort_order = id WHERE sort_order IS NULL")
 
 
+def ensure_priority_column(connection: sqlite3.Connection) -> None:
+    columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(todos)").fetchall()
+    }
+    if "priority" in columns:
+        return
+    connection.execute("ALTER TABLE todos ADD COLUMN priority INTEGER")
+
+
 def list_todos(connection: sqlite3.Connection, status: str) -> Iterable[TodoRecord]:
     rows = connection.execute(
         """
-        SELECT id, text, timestamp, status, parent_id, sort_order
+        SELECT id, text, timestamp, status, parent_id, sort_order, priority
         FROM todos
         WHERE status = ?
         ORDER BY sort_order, id
@@ -117,6 +130,7 @@ def list_todos(connection: sqlite3.Connection, status: str) -> Iterable[TodoReco
             status=row["status"],
             parent_id=row["parent_id"],
             sort_order=row["sort_order"] if row["sort_order"] is not None else row["id"],
+            priority=row["priority"],
         )
         for row in rows
     ]
@@ -128,6 +142,7 @@ def add_todo(
     status: str = "todo",
     parent_id: int | None = None,
     sort_order: float | None = None,
+    priority: int | None = None,
 ) -> TodoRecord:
     if sort_order is None:
         row = connection.execute(
@@ -138,13 +153,21 @@ def add_todo(
     timestamp = datetime.now(tz=timezone.utc).isoformat()
     cursor = connection.execute(
         """
-        INSERT INTO todos (text, timestamp, status, completed_timestamp, parent_id, sort_order)
-        VALUES (?, ?, ?, NULL, ?, ?)
+        INSERT INTO todos (text, timestamp, status, completed_timestamp, parent_id, sort_order, priority)
+        VALUES (?, ?, ?, NULL, ?, ?, ?)
         """,
-        (text, timestamp, status, parent_id, sort_order),
+        (text, timestamp, status, parent_id, sort_order, priority),
     )
     connection.commit()
-    return TodoRecord(cursor.lastrowid, text, timestamp, status, parent_id, sort_order)
+    return TodoRecord(
+        cursor.lastrowid,
+        text,
+        timestamp,
+        status,
+        parent_id,
+        sort_order,
+        priority,
+    )
 
 
 def update_status(connection: sqlite3.Connection, todo_id: int, status: str) -> None:
@@ -170,6 +193,16 @@ def update_parent(
     connection.execute(
         "UPDATE todos SET parent_id = ? WHERE id = ?",
         (parent_id, todo_id),
+    )
+    connection.commit()
+
+
+def update_priority(
+    connection: sqlite3.Connection, todo_id: int, priority: int | None
+) -> None:
+    connection.execute(
+        "UPDATE todos SET priority = ? WHERE id = ?",
+        (priority, todo_id),
     )
     connection.commit()
 
