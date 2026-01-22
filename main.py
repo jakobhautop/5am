@@ -138,7 +138,7 @@ class TodoApp(App):
         height: 1fr;
     }
     .sparkline-legend {
-        dock: bottom;
+        dock: top;
         height: 1;
         padding: 0 1;
         text-align: left;
