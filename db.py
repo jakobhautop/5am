@@ -207,6 +207,39 @@ def update_priority(
     connection.commit()
 
 
+def update_text(connection: sqlite3.Connection, todo_id: int, text: str) -> None:
+    connection.execute(
+        "UPDATE todos SET text = ? WHERE id = ?",
+        (text, todo_id),
+    )
+    connection.commit()
+
+
+def list_created_counts_by_day(
+    connection: sqlite3.Connection, days: int = 14
+) -> list[int]:
+    today = datetime.now(tz=timezone.utc).date()
+    start_day = today - timedelta(days=days - 1)
+    start_timestamp = datetime.combine(
+        start_day, datetime.min.time(), tzinfo=timezone.utc
+    ).isoformat()
+    rows = connection.execute(
+        """
+        SELECT date(timestamp) AS day, COUNT(*) AS total
+        FROM todos
+        WHERE timestamp >= ?
+        GROUP BY day
+        ORDER BY day
+        """,
+        (start_timestamp,),
+    ).fetchall()
+    totals_by_day = {row["day"]: row["total"] for row in rows}
+    return [
+        totals_by_day.get((start_day + timedelta(days=offset)).isoformat(), 0)
+        for offset in range(days)
+    ]
+
+
 def list_completed_counts_by_day(
     connection: sqlite3.Connection, days: int = 14
 ) -> list[int]:

@@ -15,6 +15,7 @@ from db import (
     add_focus_seconds,
     connect_db,
     delete_todo,
+    list_created_counts_by_day,
     list_completed_counts_by_day,
     list_focus_minutes_by_day,
     list_todos,
@@ -22,6 +23,7 @@ from db import (
     update_status,
     update_parent,
     update_priority,
+    update_text,
 )
 
 
@@ -130,6 +132,10 @@ class TodoApp(App):
     }
     #completed-sparkline {
         height: 1fr;
+        margin-top: 1;
+    }
+    #created-sparkline {
+        height: 1fr;
     }
     #focus-sparkline {
         height: 1fr;
@@ -189,6 +195,7 @@ class TodoApp(App):
         ("p", "new_parent_task", "New parent task"),
         ("n", "new_task", "New task"),
         ("o", "toggle_priority_order", "Toggle priority order"),
+        ("e", "edit_task", "Edit task"),
     ]
 
     def __init__(self) -> None:
@@ -196,6 +203,7 @@ class TodoApp(App):
         self.connection = connect_db()
         self.focus_session: Optional[tuple[int, float, str]] = None
         self.pending_task: PendingTask | None = None
+        self.editing_task_id: int | None = None
         self.default_placeholder = "New task…"
         self.priority_order = False
 
@@ -213,13 +221,15 @@ class TodoApp(App):
                 yield Label("Done", classes="title")
                 yield ListView(id="done-list")
         with Vertical(id="sparkline-panel"):
+            yield Label("Created per day", classes="sparkline-title")
+            yield Sparkline(id="created-sparkline")
             yield Label("Completed per day", classes="sparkline-title")
             yield Sparkline(id="completed-sparkline")
             yield Label("Focus minutes per day", classes="sparkline-title")
             yield Sparkline(id="focus-sparkline")
         yield Input(placeholder="New task…", id="new-task-input")
         yield Label(
-            "h/l switch lists  •  j/k move  •  1-9 priority  •  o order  •  f flip item  •  t focus time  •  c child  •  p parent  •  d delete item  •  n new task",
+            "h/l switch lists  •  j/k move  •  0 clear priority  •  1-9 priority  •  o order  •  f flip item  •  e edit item  •  t focus time  •  c child  •  p parent  •  d delete item  •  n new task",
             id="footer-help",
         )
 
@@ -275,6 +285,8 @@ class TodoApp(App):
         return ordered
 
     def refresh_sparkline(self) -> None:
+        created_sparkline = self.query_one("#created-sparkline", Sparkline)
+        created_sparkline.data = list_created_counts_by_day(self.connection)
         sparkline = self.query_one("#completed-sparkline", Sparkline)
         sparkline.data = list_completed_counts_by_day(self.connection)
         focus_sparkline = self.query_one("#focus-sparkline", Sparkline)
@@ -359,6 +371,7 @@ class TodoApp(App):
 
     def action_new_task(self) -> None:
         self.pending_task = None
+        self.editing_task_id = None
         input_box = self.query_one("#new-task-input", Input)
         input_box.placeholder = self.default_placeholder
         input_box.focus()
@@ -401,6 +414,7 @@ class TodoApp(App):
             reparent_id=None,
             placeholder="New child task…",
         )
+        self.editing_task_id = None
         input_box = self.query_one("#new-task-input", Input)
         input_box.placeholder = self.pending_task.placeholder
         input_box.focus()
@@ -422,8 +436,22 @@ class TodoApp(App):
             reparent_id=item.todo_id,
             placeholder="New parent task…",
         )
+        self.editing_task_id = None
         input_box = self.query_one("#new-task-input", Input)
         input_box.placeholder = self.pending_task.placeholder
+        input_box.focus()
+
+    def action_edit_task(self) -> None:
+        list_view = self.get_active_list()
+        item = self.get_highlighted_item(list_view)
+        if not item:
+            return
+        self.pending_task = None
+        self.editing_task_id = item.todo_id
+        input_box = self.query_one("#new-task-input", Input)
+        input_box.placeholder = "Edit task…"
+        input_box.value = item.text
+        input_box.cursor_position = len(item.text)
         input_box.focus()
 
     def sort_order_after_index(self, items: list[TodoListItem], index: int) -> float:
@@ -471,6 +499,15 @@ class TodoApp(App):
         text = event.value.strip()
         if not text:
             return
+        if self.editing_task_id is not None:
+            todo_id = self.editing_task_id
+            self.editing_task_id = None
+            update_text(self.connection, todo_id, text)
+            event.input.value = ""
+            event.input.placeholder = self.default_placeholder
+            self.refresh_lists()
+            self.get_active_list().focus()
+            return
         focus_list_id = "#todo-list"
         if self.pending_task:
             new_record = add_todo(
@@ -499,14 +536,19 @@ class TodoApp(App):
     def on_key(self, event) -> None:
         if isinstance(self.focused, Input):
             return
-        if event.key in {"1", "2", "3", "4", "5", "6", "7", "8", "9"}:
+        if event.key in {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}:
             list_view = self.get_active_list()
             if list_view.id != "todo-list":
                 return
             item = self.get_highlighted_item(list_view)
             if not item:
                 return
-            update_priority(self.connection, item.todo_id, int(event.key))
+            priority = int(event.key)
+            update_priority(
+                self.connection,
+                item.todo_id,
+                None if priority == 0 else priority,
+            )
             index = self.get_highlighted_index(list_view)
             self.refresh_lists()
             refreshed_list = self.query_one("#todo-list", ListView)
