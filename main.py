@@ -14,8 +14,6 @@ from textual.widgets import (
     ListItem,
     ListView,
     Sparkline,
-    TabbedContent,
-    TabPane,
 )
 
 from db import (
@@ -91,6 +89,20 @@ class FocusModal(ModalScreen[int]):
         self.dismiss(elapsed)
 
 
+class SettingsModal(ModalScreen[None]):
+    BINDINGS = [("escape", "close", "Close settings")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="settings-modal"):
+            yield Label("Settings", id="settings-modal-title")
+            yield Label("Done list", classes="settings-heading")
+            with Container(classes="settings-box"):
+                yield Label("")
+
+    def action_close(self) -> None:
+        self.dismiss()
+
+
 class TodoApp(App):
     CSS = """
     Screen {
@@ -101,6 +113,9 @@ class TodoApp(App):
         height: 1fr;
     }
     FocusModal {
+        align: center middle;
+    }
+    SettingsModal {
         align: center middle;
     }
     #lists {
@@ -176,6 +191,18 @@ class TodoApp(App):
         text-align: center;
         color: #a0a0a0;
     }
+    #settings-modal {
+        width: 60%;
+        padding: 1 2;
+        border: heavy #5f5f5f;
+        background: #0f0f0f;
+    }
+    #settings-modal-title {
+        text-align: center;
+        text-style: bold;
+        color: #f0f0f0;
+        margin-bottom: 1;
+    }
     ListView > ListItem {
         padding: 0 1;
     }
@@ -194,9 +221,6 @@ class TodoApp(App):
         background: transparent;
         color: #c0c0c0;
         padding: 0 1;
-    }
-    #settings-view {
-        padding: 1 2;
     }
     .settings-heading {
         color: #f0f0f0;
@@ -224,6 +248,7 @@ class TodoApp(App):
         ("n", "new_task", "New task"),
         ("o", "toggle_priority_order", "Toggle priority order"),
         ("e", "edit_task", "Edit task"),
+        ("a", "open_settings", "Settings"),
     ]
 
     def __init__(self) -> None:
@@ -241,38 +266,31 @@ class TodoApp(App):
 
     def compose(self) -> ComposeResult:
         yield Label("5am", id="app-title")
-        with TabbedContent(id="app-tabs"):
-            with TabPane("Tasks", id="tasks-tab"):
-                with Vertical(id="tasks-view"):
-                    with Horizontal(id="lists"):
-                        with Vertical(classes="pane"):
-                            with Vertical(classes="pane-box"):
-                                yield Label("Todo", classes="title")
-                                yield ListView(id="todo-list")
-                        with Vertical(classes="pane"):
-                            with Vertical(classes="pane-box"):
-                                yield Label("Done", classes="title")
-                                yield ListView(id="done-list")
-                    with Vertical(id="sparkline-panel"):
-                        with Container(classes="sparkline-group"):
-                            yield Sparkline(id="created-sparkline")
-                            yield Label("Created per day", classes="sparkline-legend")
-                        with Container(classes="sparkline-group"):
-                            yield Sparkline(id="completed-sparkline")
-                            yield Label("Completed per day", classes="sparkline-legend")
-                        with Container(classes="sparkline-group"):
-                            yield Sparkline(id="focus-sparkline")
-                            yield Label("Focus minutes per day", classes="sparkline-legend")
-                    yield Input(placeholder="New task…", id="new-task-input")
-                    yield Label(
-                        "h/j/k/l move, 0-9 prio, o order, f flip, e edit, t time, c child, s sibling, p parent, d delete",
-                        id="footer-help",
-                    )
-            with TabPane("Settings", id="settings-tab"):
-                with Vertical(id="settings-view"):
-                    yield Label("Done list", classes="settings-heading")
-                    with Container(classes="settings-box"):
-                        yield Label("")
+        with Vertical(id="tasks-view"):
+            with Horizontal(id="lists"):
+                with Vertical(classes="pane"):
+                    with Vertical(classes="pane-box"):
+                        yield Label("Todo", classes="title")
+                        yield ListView(id="todo-list")
+                with Vertical(classes="pane"):
+                    with Vertical(classes="pane-box"):
+                        yield Label("Done", classes="title")
+                        yield ListView(id="done-list")
+            with Vertical(id="sparkline-panel"):
+                with Container(classes="sparkline-group"):
+                    yield Sparkline(id="created-sparkline")
+                    yield Label("Created per day", classes="sparkline-legend")
+                with Container(classes="sparkline-group"):
+                    yield Sparkline(id="completed-sparkline")
+                    yield Label("Completed per day", classes="sparkline-legend")
+                with Container(classes="sparkline-group"):
+                    yield Sparkline(id="focus-sparkline")
+                    yield Label("Focus minutes per day", classes="sparkline-legend")
+            yield Input(placeholder="New task…", id="new-task-input")
+            yield Label(
+                "h/j/k/l move, 0-9 prio, o order, f flip, e edit, t time, c child, s sibling, p parent, d delete, a settings",
+                id="footer-help",
+            )
 
     def on_mount(self) -> None:
         self.refresh_lists()
@@ -521,6 +539,9 @@ class TodoApp(App):
         input_box.value = item.text
         input_box.cursor_position = len(item.text)
         input_box.focus()
+
+    def action_open_settings(self) -> None:
+        self.push_screen(SettingsModal())
 
     def sort_order_after_index(self, items: list[TodoListItem], index: int) -> float:
         prev_order = items[index].sort_order
