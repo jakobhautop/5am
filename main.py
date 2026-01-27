@@ -256,9 +256,8 @@ class TodoApp(App):
         background: transparent;
     }
     .settings-row {
-        height: 1;
         align: center middle;
-        padding: 1 1 0 1;
+        padding: 1 1;
     }
     .settings-label {
         width: 1fr;
