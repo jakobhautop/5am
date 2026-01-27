@@ -8,7 +8,15 @@ from typing import Optional
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Input, Label, ListItem, ListView, Sparkline
+from textual.widgets import (
+    Input,
+    Label,
+    ListItem,
+    ListView,
+    Sparkline,
+    TabbedContent,
+    TabPane,
+)
 
 from db import (
     add_todo,
@@ -88,6 +96,9 @@ class TodoApp(App):
     Screen {
         background: #0b0b0b;
         color: #d0d0d0;
+    }
+    TabbedContent {
+        height: 1fr;
     }
     FocusModal {
         align: center middle;
@@ -184,6 +195,19 @@ class TodoApp(App):
         color: #c0c0c0;
         padding: 0 1;
     }
+    #settings-view {
+        padding: 1 2;
+    }
+    .settings-heading {
+        color: #f0f0f0;
+        text-style: bold;
+    }
+    .settings-box {
+        height: 5;
+        margin-top: 1;
+        border: solid #3a3a3a;
+        background: transparent;
+    }
     """
 
     BINDINGS = [
@@ -217,30 +241,38 @@ class TodoApp(App):
 
     def compose(self) -> ComposeResult:
         yield Label("5am", id="app-title")
-        with Horizontal(id="lists"):
-            with Vertical(classes="pane"):
-                with Vertical(classes="pane-box"):
-                    yield Label("Todo", classes="title")
-                    yield ListView(id="todo-list")
-            with Vertical(classes="pane"):
-                with Vertical(classes="pane-box"):
-                    yield Label("Done", classes="title")
-                    yield ListView(id="done-list")
-        with Vertical(id="sparkline-panel"):
-            with Container(classes="sparkline-group"):
-                yield Sparkline(id="created-sparkline")
-                yield Label("Created per day", classes="sparkline-legend")
-            with Container(classes="sparkline-group"):
-                yield Sparkline(id="completed-sparkline")
-                yield Label("Completed per day", classes="sparkline-legend")
-            with Container(classes="sparkline-group"):
-                yield Sparkline(id="focus-sparkline")
-                yield Label("Focus minutes per day", classes="sparkline-legend")
-        yield Input(placeholder="New task…", id="new-task-input")
-        yield Label(
-            "h/j/k/l move, 0-9 prio, o order, f flip, e edit, t time, c child, s sibling, p parent, d delete",
-            id="footer-help",
-        )
+        with TabbedContent(id="app-tabs"):
+            with TabPane("Tasks", id="tasks-tab"):
+                with Vertical(id="tasks-view"):
+                    with Horizontal(id="lists"):
+                        with Vertical(classes="pane"):
+                            with Vertical(classes="pane-box"):
+                                yield Label("Todo", classes="title")
+                                yield ListView(id="todo-list")
+                        with Vertical(classes="pane"):
+                            with Vertical(classes="pane-box"):
+                                yield Label("Done", classes="title")
+                                yield ListView(id="done-list")
+                    with Vertical(id="sparkline-panel"):
+                        with Container(classes="sparkline-group"):
+                            yield Sparkline(id="created-sparkline")
+                            yield Label("Created per day", classes="sparkline-legend")
+                        with Container(classes="sparkline-group"):
+                            yield Sparkline(id="completed-sparkline")
+                            yield Label("Completed per day", classes="sparkline-legend")
+                        with Container(classes="sparkline-group"):
+                            yield Sparkline(id="focus-sparkline")
+                            yield Label("Focus minutes per day", classes="sparkline-legend")
+                    yield Input(placeholder="New task…", id="new-task-input")
+                    yield Label(
+                        "h/j/k/l move, 0-9 prio, o order, f flip, e edit, t time, c child, s sibling, p parent, d delete",
+                        id="footer-help",
+                    )
+            with TabPane("Settings", id="settings-tab"):
+                with Vertical(id="settings-view"):
+                    yield Label("Done list", classes="settings-heading")
+                    with Container(classes="settings-box"):
+                        yield Label("")
 
     def on_mount(self) -> None:
         self.refresh_lists()
