@@ -195,6 +195,7 @@ class TodoApp(App):
         ("d", "delete_item", "Delete item"),
         ("t", "focus_task", "Focus task"),
         ("c", "new_child_task", "New child task"),
+        ("s", "new_sibling_task", "New sibling task"),
         ("p", "new_parent_task", "New parent task"),
         ("n", "new_task", "New task"),
         ("o", "toggle_priority_order", "Toggle priority order"),
@@ -237,7 +238,7 @@ class TodoApp(App):
                 yield Label("Focus minutes per day", classes="sparkline-legend")
         yield Input(placeholder="New task…", id="new-task-input")
         yield Label(
-            "h/j/k/l move, 0-9 prio, o order, f flip, e edit, t time, c child, p parent, d delete",
+            "h/j/k/l move, 0-9 prio, o order, f flip, e edit, t time, c child, s sibling, p parent, d delete",
             id="footer-help",
         )
 
@@ -443,6 +444,33 @@ class TodoApp(App):
             sort_order=sort_order,
             reparent_id=item.todo_id,
             placeholder="New parent task…",
+        )
+        self.editing_task_id = None
+        input_box = self.query_one("#new-task-input", Input)
+        input_box.placeholder = self.pending_task.placeholder
+        input_box.focus()
+
+    def action_new_sibling_task(self) -> None:
+        list_view = self.get_active_list()
+        item = self.get_highlighted_item(list_view)
+        if not item:
+            return
+        items = self.get_list_items(list_view)
+        index = self.get_highlighted_index(list_view)
+        if index is None:
+            return
+        last_index = index
+        for next_index in range(index + 1, len(items)):
+            if items[next_index].depth <= item.depth:
+                break
+            last_index = next_index
+        sort_order = self.sort_order_after_index(items, last_index)
+        self.pending_task = PendingTask(
+            parent_id=item.parent_id,
+            status=item.status,
+            sort_order=sort_order,
+            reparent_id=None,
+            placeholder="New sibling task…",
         )
         self.editing_task_id = None
         input_box = self.query_one("#new-task-input", Input)
