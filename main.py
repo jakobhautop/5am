@@ -571,6 +571,14 @@ class TodoApp(App):
 
     def on_key(self, event) -> None:
         if isinstance(self.focused, Input):
+            if event.key == "escape":
+                input_box = self.query_one("#new-task-input", Input)
+                input_box.value = ""
+                input_box.placeholder = self.default_placeholder
+                self.pending_task = None
+                self.editing_task_id = None
+                self.query_one("#todo-list", ListView).focus()
+                event.stop()
             return
         if event.key in {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}:
             list_view = self.get_active_list()
