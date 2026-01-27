@@ -65,6 +65,14 @@ def initialize_db(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
     ensure_completed_timestamp_column(connection)
     ensure_parent_id_column(connection)
     ensure_sort_order_column(connection)
@@ -134,6 +142,69 @@ def list_todos(connection: sqlite3.Connection, status: str) -> Iterable[TodoReco
         )
         for row in rows
     ]
+
+
+def list_done_todos_for_today(
+    connection: sqlite3.Connection,
+) -> Iterable[TodoRecord]:
+    today = datetime.now(tz=timezone.utc).date().isoformat()
+    rows = connection.execute(
+        """
+        SELECT id, text, timestamp, status, parent_id, sort_order, priority
+        FROM todos
+        WHERE status = 'done' AND date(completed_timestamp) = ?
+        ORDER BY sort_order, id
+        """,
+        (today,),
+    ).fetchall()
+    return [
+        TodoRecord(
+            todo_id=row["id"],
+            text=row["text"],
+            timestamp=row["timestamp"],
+            status=row["status"],
+            parent_id=row["parent_id"],
+            sort_order=row["sort_order"] if row["sort_order"] is not None else row["id"],
+            priority=row["priority"],
+        )
+        for row in rows
+    ]
+
+
+def get_setting(connection: sqlite3.Connection, key: str) -> str | None:
+    row = connection.execute(
+        "SELECT value FROM settings WHERE key = ?",
+        (key,),
+    ).fetchone()
+    if row is None:
+        return None
+    return row["value"]
+
+
+def set_setting(connection: sqlite3.Connection, key: str, value: str) -> None:
+    connection.execute(
+        """
+        INSERT INTO settings (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key)
+        DO UPDATE SET value = excluded.value
+        """,
+        (key, value),
+    )
+    connection.commit()
+
+
+def get_bool_setting(
+    connection: sqlite3.Connection, key: str, default: bool = False
+) -> bool:
+    value = get_setting(connection, key)
+    if value is None:
+        return default
+    return value == "1"
+
+
+def set_bool_setting(connection: sqlite3.Connection, key: str, value: bool) -> None:
+    set_setting(connection, key, "1" if value else "0")
 
 
 def add_todo(

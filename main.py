@@ -14,6 +14,7 @@ from textual.widgets import (
     ListItem,
     ListView,
     Sparkline,
+    Switch,
 )
 
 from db import (
@@ -21,11 +22,14 @@ from db import (
     add_focus_seconds,
     connect_db,
     delete_todo,
+    get_bool_setting,
     list_created_counts_by_day,
     list_completed_counts_by_day,
+    list_done_todos_for_today,
     list_focus_minutes_by_day,
     list_todos,
     TodoRecord,
+    set_bool_setting,
     update_status,
     update_parent,
     update_priority,
@@ -92,15 +96,34 @@ class FocusModal(ModalScreen[int]):
 class SettingsModal(ModalScreen[None]):
     BINDINGS = [("escape", "close", "Close settings")]
 
+    def __init__(self, show_done_today_only: bool) -> None:
+        super().__init__()
+        self.show_done_today_only = show_done_today_only
+
     def compose(self) -> ComposeResult:
         with Vertical(id="settings-modal"):
             yield Label("Settings", id="settings-modal-title")
             yield Label("Done list", classes="settings-heading")
             with Container(classes="settings-box"):
-                yield Label("")
+                with Horizontal(classes="settings-row"):
+                    yield Label(
+                        "Show items completed today only",
+                        classes="settings-label",
+                    )
+                    yield Switch(
+                        value=self.show_done_today_only,
+                        id="done-today-toggle",
+                    )
 
     def action_close(self) -> None:
         self.dismiss()
+
+    def on_switch_changed(self, event: Switch.Changed) -> None:
+        if event.switch.id != "done-today-toggle":
+            return
+        app = self.app
+        if isinstance(app, TodoApp):
+            app.set_show_done_today_only(event.value)
 
 
 class TodoApp(App):
@@ -232,6 +255,15 @@ class TodoApp(App):
         border: solid #3a3a3a;
         background: transparent;
     }
+    .settings-row {
+        height: 1;
+        align: center middle;
+        padding: 1 1 0 1;
+    }
+    .settings-label {
+        width: 1fr;
+        color: #d0d0d0;
+    }
     """
 
     BINDINGS = [
@@ -254,6 +286,11 @@ class TodoApp(App):
     def __init__(self) -> None:
         super().__init__()
         self.connection = connect_db()
+        self.show_done_today_only = get_bool_setting(
+            self.connection,
+            "donelist.show_completed_today_only",
+            default=False,
+        )
         self.focus_session: Optional[tuple[int, float, str]] = None
         self.pending_task: PendingTask | None = None
         self.editing_task_id: int | None = None
@@ -308,7 +345,10 @@ class TodoApp(App):
         self.refresh_sparkline()
 
     def build_display_items(self, status: str) -> list[tuple[TodoRecord, int]]:
-        records = list_todos(self.connection, status)
+        if status == "done" and self.show_done_today_only:
+            records = list_done_todos_for_today(self.connection)
+        else:
+            records = list_todos(self.connection, status)
         if status == "todo" and self.priority_order:
             def flat_sort_key(item) -> tuple[float, str, int]:
                 priority_value = float(item.priority) if item.priority is not None else 99.0
@@ -541,7 +581,16 @@ class TodoApp(App):
         input_box.focus()
 
     def action_open_settings(self) -> None:
-        self.push_screen(SettingsModal())
+        self.push_screen(SettingsModal(self.show_done_today_only))
+
+    def set_show_done_today_only(self, value: bool) -> None:
+        self.show_done_today_only = value
+        set_bool_setting(
+            self.connection,
+            "donelist.show_completed_today_only",
+            value,
+        )
+        self.refresh_lists()
 
     def sort_order_after_index(self, items: list[TodoListItem], index: int) -> float:
         prev_order = items[index].sort_order
