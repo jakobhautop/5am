@@ -250,18 +250,23 @@ class TodoApp(App):
         text-style: bold;
     }
     .settings-box {
-        height: 5;
+        height: auto;
         margin-top: 1;
-        border: solid #3a3a3a;
+        padding: 0 1;
+        border: none;
         background: transparent;
     }
     .settings-row {
         align: center middle;
         padding: 1 1;
+        width: 100%;
     }
     .settings-label {
         width: 1fr;
         color: #d0d0d0;
+    }
+    .settings-row Switch {
+        margin-left: 1;
     }
     """
 
