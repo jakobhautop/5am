@@ -268,6 +268,16 @@ def update_parent(
     connection.commit()
 
 
+def update_sort_order(
+    connection: sqlite3.Connection, todo_id: int, sort_order: float
+) -> None:
+    connection.execute(
+        "UPDATE todos SET sort_order = ? WHERE id = ?",
+        (sort_order, todo_id),
+    )
+    connection.commit()
+
+
 def update_priority(
     connection: sqlite3.Connection, todo_id: int, priority: int | None
 ) -> None:

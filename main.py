@@ -33,6 +33,7 @@ from db import (
     update_status,
     update_parent,
     update_priority,
+    update_sort_order,
     update_text,
 )
 
@@ -60,6 +61,13 @@ class PendingTask:
     sort_order: float
     reparent_id: int | None
     placeholder: str
+
+
+@dataclass
+class PendingMove:
+    todo_id: int
+    status: str
+    list_id: str
 
 
 class FocusModal(ModalScreen[int]):
@@ -281,6 +289,7 @@ class TodoApp(App):
         ("c", "new_child_task", "New child task"),
         ("s", "new_sibling_task", "New sibling task"),
         ("p", "new_parent_task", "New parent task"),
+        ("m", "start_move", "Move task"),
         ("n", "new_task", "New task"),
         ("o", "toggle_priority_order", "Toggle priority order"),
         ("e", "edit_task", "Edit task"),
@@ -297,6 +306,7 @@ class TodoApp(App):
         )
         self.focus_session: Optional[tuple[int, float, str]] = None
         self.pending_task: PendingTask | None = None
+        self.pending_move: PendingMove | None = None
         self.editing_task_id: int | None = None
         self.default_placeholder = "New task…"
         self.priority_order = False
@@ -329,7 +339,7 @@ class TodoApp(App):
                     yield Label("Focus minutes per day", classes="sparkline-legend")
             yield Input(placeholder="New task…", id="new-task-input")
             yield Label(
-                "h/j/k/l move, 0-9 prio, o order, f flip, e edit, t time, c child, s sibling, p parent, d delete, a settings",
+                "h/j/k/l move, 0-9 prio, o order, f flip, e edit, t time, m move, c child, s sibling, p parent, d delete, a settings",
                 id="footer-help",
             )
 
@@ -426,6 +436,44 @@ class TodoApp(App):
             item for item in list_view.children if isinstance(item, TodoListItem)
         ]
 
+    def find_item_by_id(
+        self, items: list[TodoListItem], todo_id: int
+    ) -> TodoListItem | None:
+        for item in items:
+            if item.todo_id == todo_id:
+                return item
+        return None
+
+    def is_descendant(
+        self,
+        candidate_id: int,
+        ancestor_id: int,
+        parent_by_id: dict[int, int | None],
+    ) -> bool:
+        current = parent_by_id.get(candidate_id)
+        while current is not None:
+            if current == ancestor_id:
+                return True
+            current = parent_by_id.get(current)
+        return False
+
+    def last_descendant_index(
+        self, items: list[TodoListItem], index: int
+    ) -> int:
+        parent = items[index]
+        last_index = index
+        for next_index in range(index + 1, len(items)):
+            if items[next_index].depth <= parent.depth:
+                break
+            last_index = next_index
+        return last_index
+
+    def sort_order_after_subtree(
+        self, items: list[TodoListItem], index: int
+    ) -> float:
+        last_index = self.last_descendant_index(items, index)
+        return self.sort_order_after_index(items, last_index)
+
     def action_focus_left(self) -> None:
         self.query_one("#todo-list", ListView).focus()
 
@@ -444,8 +492,22 @@ class TodoApp(App):
         if move:
             move()
 
+    def action_start_move(self) -> None:
+        if self.priority_order:
+            return
+        list_view = self.get_active_list()
+        item = self.get_highlighted_item(list_view)
+        if not item:
+            return
+        self.pending_move = PendingMove(
+            todo_id=item.todo_id,
+            status=item.status,
+            list_id=list_view.id or "",
+        )
+
     def action_toggle_priority_order(self) -> None:
         self.priority_order = not self.priority_order
+        self.pending_move = None
         focused = self.focused
         focus_id = focused.id if hasattr(focused, "id") else "#todo-list"
         if focus_id and not focus_id.startswith("#"):
@@ -496,6 +558,9 @@ class TodoApp(App):
         )
 
     def action_new_child_task(self) -> None:
+        if self.pending_move:
+            self.perform_move("child")
+            return
         list_view = self.get_active_list()
         item = self.get_highlighted_item(list_view)
         if not item:
@@ -523,6 +588,9 @@ class TodoApp(App):
         input_box.focus()
 
     def action_new_parent_task(self) -> None:
+        if self.pending_move:
+            self.perform_move("parent")
+            return
         list_view = self.get_active_list()
         item = self.get_highlighted_item(list_view)
         if not item:
@@ -545,6 +613,9 @@ class TodoApp(App):
         input_box.focus()
 
     def action_new_sibling_task(self) -> None:
+        if self.pending_move:
+            self.perform_move("sibling")
+            return
         list_view = self.get_active_list()
         item = self.get_highlighted_item(list_view)
         if not item:
@@ -570,6 +641,53 @@ class TodoApp(App):
         input_box = self.query_one("#new-task-input", Input)
         input_box.placeholder = self.pending_task.placeholder
         input_box.focus()
+
+    def perform_move(self, relationship: str) -> None:
+        move_request = self.pending_move
+        self.pending_move = None
+        if not move_request:
+            return
+        list_view = self.get_active_list()
+        if list_view.id != move_request.list_id:
+            return
+        items = self.get_list_items(list_view)
+        source_item = self.find_item_by_id(items, move_request.todo_id)
+        target_item = self.get_highlighted_item(list_view)
+        if not source_item or not target_item:
+            return
+        if source_item.todo_id == target_item.todo_id:
+            return
+        if source_item.status != target_item.status:
+            return
+        parent_by_id = {item.todo_id: item.parent_id for item in items}
+        if self.is_descendant(target_item.todo_id, source_item.todo_id, parent_by_id):
+            if relationship == "sibling":
+                source_parent = parent_by_id.get(source_item.todo_id)
+                source_index = items.index(source_item)
+                sort_order = self.sort_order_after_subtree(items, source_index)
+                update_parent(self.connection, target_item.todo_id, source_parent)
+                update_sort_order(self.connection, target_item.todo_id, sort_order)
+                self.refresh_lists()
+                list_view.focus()
+            return
+        target_index = self.get_highlighted_index(list_view)
+        if target_index is None:
+            return
+        if relationship == "child":
+            sort_order = self.sort_order_after_subtree(items, target_index)
+            update_parent(self.connection, source_item.todo_id, target_item.todo_id)
+            update_sort_order(self.connection, source_item.todo_id, sort_order)
+        elif relationship == "sibling":
+            sort_order = self.sort_order_after_subtree(items, target_index)
+            update_parent(self.connection, source_item.todo_id, target_item.parent_id)
+            update_sort_order(self.connection, source_item.todo_id, sort_order)
+        elif relationship == "parent":
+            sort_order = self.sort_order_before_index(items, target_index)
+            update_parent(self.connection, source_item.todo_id, target_item.parent_id)
+            update_sort_order(self.connection, source_item.todo_id, sort_order)
+            update_parent(self.connection, target_item.todo_id, source_item.todo_id)
+        self.refresh_lists()
+        list_view.focus()
 
     def action_edit_task(self) -> None:
         list_view = self.get_active_list()
