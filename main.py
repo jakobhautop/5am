@@ -104,13 +104,31 @@ class FocusModal(ModalScreen[int]):
 class SettingsModal(ModalScreen[None]):
     BINDINGS = [("escape", "close", "Close settings")]
 
-    def __init__(self, show_done_today_only: bool) -> None:
+    def __init__(
+        self,
+        show_done_today_only: bool,
+        show_done_items: bool,
+        show_prioritized_only_ordered: bool,
+    ) -> None:
         super().__init__()
         self.show_done_today_only = show_done_today_only
+        self.show_done_items = show_done_items
+        self.show_prioritized_only_ordered = show_prioritized_only_ordered
 
     def compose(self) -> ComposeResult:
         with Vertical(id="settings-modal"):
             yield Label("Settings", id="settings-modal-title")
+            yield Label("Dashboard", classes="settings-heading")
+            with Container(classes="settings-box"):
+                with Horizontal(classes="settings-row"):
+                    yield Label(
+                        "Show done items",
+                        classes="settings-label",
+                    )
+                    yield Switch(
+                        value=self.show_done_items,
+                        id="show-done-toggle",
+                    )
             yield Label("Done list", classes="settings-heading")
             with Container(classes="settings-box"):
                 with Horizontal(classes="settings-row"):
@@ -122,16 +140,30 @@ class SettingsModal(ModalScreen[None]):
                         value=self.show_done_today_only,
                         id="done-today-toggle",
                     )
+            yield Label("Ordered view", classes="settings-heading")
+            with Container(classes="settings-box"):
+                with Horizontal(classes="settings-row"):
+                    yield Label(
+                        "Only show prioritized items",
+                        classes="settings-label",
+                    )
+                    yield Switch(
+                        value=self.show_prioritized_only_ordered,
+                        id="ordered-priority-toggle",
+                    )
 
     def action_close(self) -> None:
         self.dismiss()
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
-        if event.switch.id != "done-today-toggle":
-            return
         app = self.app
         if isinstance(app, TodoApp):
-            app.set_show_done_today_only(event.value)
+            if event.switch.id == "done-today-toggle":
+                app.set_show_done_today_only(event.value)
+            elif event.switch.id == "show-done-toggle":
+                app.set_show_done_items(event.value)
+            elif event.switch.id == "ordered-priority-toggle":
+                app.set_show_prioritized_only_ordered(event.value)
 
 
 class TodoApp(App):
@@ -217,6 +249,8 @@ class TodoApp(App):
         text-align: center;
         color: #d0d0d0;
         margin-bottom: 1;
+        text-wrap: wrap;
+        width: 100%;
     }
     #focus-modal-timer {
         text-align: center;
@@ -241,6 +275,14 @@ class TodoApp(App):
         background: transparent;
         color: #f0f0f0;
         text-style: bold;
+    }
+    ListView > ListItem.moving-item {
+        background: #3a5f3a;
+        color: #f0f0f0;
+    }
+    ListView > ListItem.moving-item.--highlight {
+        background: #4a7a4a;
+        color: #f0f0f0;
     }
     #new-task-input {
         margin: 0 1;
@@ -304,6 +346,16 @@ class TodoApp(App):
             "donelist.show_completed_today_only",
             default=False,
         )
+        self.show_done_items = get_bool_setting(
+            self.connection,
+            "dashboard.show_done_items",
+            default=True,
+        )
+        self.show_prioritized_only_ordered = get_bool_setting(
+            self.connection,
+            "ordered.show_prioritized_only",
+            default=True,
+        )
         self.focus_session: Optional[tuple[int, float, str]] = None
         self.pending_task: PendingTask | None = None
         self.pending_move: PendingMove | None = None
@@ -319,11 +371,11 @@ class TodoApp(App):
         yield Label("5am", id="app-title")
         with Vertical(id="tasks-view"):
             with Horizontal(id="lists"):
-                with Vertical(classes="pane"):
+                with Vertical(classes="pane", id="todo-pane"):
                     with Vertical(classes="pane-box"):
                         yield Label("Todo", classes="title")
                         yield ListView(id="todo-list")
-                with Vertical(classes="pane"):
+                with Vertical(classes="pane", id="done-pane"):
                     with Vertical(classes="pane-box"):
                         yield Label("Done", classes="title")
                         yield ListView(id="done-list")
@@ -350,12 +402,26 @@ class TodoApp(App):
     def refresh_lists(self) -> None:
         todo_list = self.query_one("#todo-list", ListView)
         done_list = self.query_one("#done-list", ListView)
+        done_pane = self.query_one("#done-pane", Vertical)
+        if self.show_done_items:
+            done_pane.styles.display = "block"
+        else:
+            done_pane.styles.display = "none"
+            if isinstance(self.focused, ListView) and self.focused.id == "done-list":
+                todo_list.focus()
         todo_list.clear()
         done_list.clear()
         for record, depth in self.build_display_items("todo"):
-            todo_list.append(TodoListItem(record, depth))
-        for record, depth in self.build_display_items("done"):
-            done_list.append(TodoListItem(record, depth))
+            item = TodoListItem(record, depth)
+            if self.pending_move and record.todo_id == self.pending_move.todo_id:
+                item.add_class("moving-item")
+            todo_list.append(item)
+        if self.show_done_items:
+            for record, depth in self.build_display_items("done"):
+                item = TodoListItem(record, depth)
+                if self.pending_move and record.todo_id == self.pending_move.todo_id:
+                    item.add_class("moving-item")
+                done_list.append(item)
         self.refresh_sparkline()
 
     def build_display_items(self, status: str) -> list[tuple[TodoRecord, int]]:
@@ -364,8 +430,13 @@ class TodoApp(App):
         else:
             records = list_todos(self.connection, status)
         if status == "todo" and self.priority_order:
+            if self.show_prioritized_only_ordered:
+                records = [record for record in records if record.priority is not None]
+
             def flat_sort_key(item) -> tuple[float, str, int]:
-                priority_value = float(item.priority) if item.priority is not None else 99.0
+                priority_value = (
+                    float(item.priority) if item.priority is not None else 99.0
+                )
                 return (priority_value, item.timestamp, item.todo_id)
 
             ordered = sorted(records, key=flat_sort_key)
@@ -478,6 +549,9 @@ class TodoApp(App):
         self.query_one("#todo-list", ListView).focus()
 
     def action_focus_right(self) -> None:
+        if not self.show_done_items:
+            self.query_one("#todo-list", ListView).focus()
+            return
         self.query_one("#done-list", ListView).focus()
 
     def action_move_down(self) -> None:
@@ -504,6 +578,8 @@ class TodoApp(App):
             status=item.status,
             list_id=list_view.id or "",
         )
+        self.refresh_lists()
+        list_view.focus()
 
     def action_toggle_priority_order(self) -> None:
         self.priority_order = not self.priority_order
@@ -703,13 +779,39 @@ class TodoApp(App):
         input_box.focus()
 
     def action_open_settings(self) -> None:
-        self.push_screen(SettingsModal(self.show_done_today_only))
+        self.push_screen(
+            SettingsModal(
+                self.show_done_today_only,
+                self.show_done_items,
+                self.show_prioritized_only_ordered,
+            )
+        )
 
     def set_show_done_today_only(self, value: bool) -> None:
         self.show_done_today_only = value
         set_bool_setting(
             self.connection,
             "donelist.show_completed_today_only",
+            value,
+        )
+        self.refresh_lists()
+
+    def set_show_done_items(self, value: bool) -> None:
+        self.show_done_items = value
+        set_bool_setting(
+            self.connection,
+            "dashboard.show_done_items",
+            value,
+        )
+        self.refresh_lists()
+        if not value:
+            self.query_one("#todo-list", ListView).focus()
+
+    def set_show_prioritized_only_ordered(self, value: bool) -> None:
+        self.show_prioritized_only_ordered = value
+        set_bool_setting(
+            self.connection,
+            "ordered.show_prioritized_only",
             value,
         )
         self.refresh_lists()
