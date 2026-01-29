@@ -259,8 +259,10 @@ class TodoApp(App):
     #settings-modal {
         width: 60%;
         padding: 1 2;
+        max-height: 90%;
         border: heavy #5f5f5f;
         background: #0f0f0f;
+        overflow-y: auto;
     }
     #settings-modal-title {
         text-align: center;
