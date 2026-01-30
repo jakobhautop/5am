@@ -303,14 +303,14 @@ class TodoApp(App):
     }
     .settings-box {
         height: auto;
-        margin-top: 1;
+        margin-top: 0;
         padding: 0 1;
         border: none;
         background: transparent;
     }
     .settings-row {
         align: center middle;
-        padding: 1 1;
+        padding: 0 1;
         width: 100%;
     }
     .settings-label {
