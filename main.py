@@ -279,12 +279,12 @@ class TodoApp(App):
         text-style: bold;
     }
     ListView > ListItem.moving-item {
-        background: #3a5f3a;
-        color: #f0f0f0;
+        background: #1f7a1f;
+        color: #e8ffe8;
     }
     ListView > ListItem.moving-item.--highlight {
-        background: #4a7a4a;
-        color: #f0f0f0;
+        background: #2faa2f;
+        color: #f4fff4;
     }
     #new-task-input {
         margin: 0 1;
