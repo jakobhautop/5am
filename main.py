@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
+from random import randint
 from time import monotonic
 from typing import Optional
 
@@ -166,6 +167,83 @@ class SettingsModal(ModalScreen[None]):
                 app.set_show_prioritized_only_ordered(event.value)
 
 
+class GamesModal(ModalScreen[str | None]):
+    BINDINGS = [("escape", "close", "Close games")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="games-modal"):
+            yield Label("Games", id="games-modal-title")
+            yield Label("Pick a game and press Enter", id="games-modal-subtitle")
+            with Vertical(classes="pane-box"):
+                with ListView(id="games-list"):
+                    yield ListItem(Label("ipv4"))
+
+    def on_mount(self) -> None:
+        self.query_one("#games-list", ListView).focus()
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        if event.list_view.id != "games-list":
+            return
+        self.dismiss("ipv4")
+
+
+class IPv4GameModal(ModalScreen[bool]):
+    BINDINGS = [("escape", "close", "Close game")]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.current_ip = ""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="games-modal"):
+            yield Label("ipv4", id="games-modal-title")
+            yield Label("Memorize the IP address", id="ipv4-game-status")
+            yield Label("", id="ipv4-game-ip")
+            yield Input(placeholder="Type the IP and press Enter", id="ipv4-game-input")
+
+    def on_mount(self) -> None:
+        self.start_round()
+
+    def action_close(self) -> None:
+        self.dismiss(False)
+
+    def start_round(self) -> None:
+        self.current_ip = ".".join(str(randint(0, 255)) for _ in range(4))
+        status = self.query_one("#ipv4-game-status", Label)
+        ip_label = self.query_one("#ipv4-game-ip", Label)
+        input_box = self.query_one("#ipv4-game-input", Input)
+        status.update("Memorize this IP address")
+        ip_label.update(self.current_ip)
+        input_box.value = ""
+        input_box.disabled = True
+        self.set_timer(2, self._hide_ip)
+
+    def _hide_ip(self) -> None:
+        status = self.query_one("#ipv4-game-status", Label)
+        ip_label = self.query_one("#ipv4-game-ip", Label)
+        input_box = self.query_one("#ipv4-game-input", Input)
+        status.update("Type the IP from memory and press Enter")
+        ip_label.update("•••")
+        input_box.disabled = False
+        input_box.focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id != "ipv4-game-input":
+            return
+        typed = event.value.strip()
+        status = self.query_one("#ipv4-game-status", Label)
+        if typed == self.current_ip:
+            status.update("🎉 Congrats! Correct answer.")
+            event.input.disabled = True
+            self.set_timer(1, lambda: self.dismiss(True))
+            return
+        status.update("Not quite. Try again.")
+        event.input.value = ""
+
+
 class TodoApp(App):
     CSS = """
     Screen {
@@ -179,6 +257,12 @@ class TodoApp(App):
         align: center middle;
     }
     SettingsModal {
+        align: center middle;
+    }
+    GamesModal {
+        align: center middle;
+    }
+    IPv4GameModal {
         align: center middle;
     }
     #lists {
@@ -264,11 +348,41 @@ class TodoApp(App):
         background: #0f0f0f;
         overflow-y: auto;
     }
+    #games-modal {
+        width: 60%;
+        padding: 1 2;
+        border: heavy #5f5f5f;
+        background: #0f0f0f;
+    }
     #settings-modal-title {
         text-align: center;
         text-style: bold;
         color: #f0f0f0;
         margin-bottom: 1;
+    }
+    #games-modal-title {
+        text-align: center;
+        text-style: bold;
+        color: #f0f0f0;
+    }
+    #games-modal-subtitle {
+        text-align: center;
+        color: #a0a0a0;
+        margin-bottom: 1;
+    }
+    #ipv4-game-status {
+        text-align: center;
+        color: #d0d0d0;
+    }
+    #ipv4-game-ip {
+        text-align: center;
+        color: #f0f0f0;
+        text-style: bold;
+        margin: 1 0;
+    }
+    #ipv4-game-input {
+        border: solid #3a3a3a;
+        background: transparent;
     }
     ListView > ListItem {
         padding: 0 1;
@@ -338,6 +452,7 @@ class TodoApp(App):
         ("o", "toggle_priority_order", "Toggle priority order"),
         ("e", "edit_task", "Edit task"),
         ("a", "open_settings", "Settings"),
+        ("g", "open_games", "Games"),
     ]
 
     def __init__(self) -> None:
@@ -393,7 +508,7 @@ class TodoApp(App):
                     yield Label("Focus minutes per day", classes="sparkline-legend")
             yield Input(placeholder="New task…", id="new-task-input")
             yield Label(
-                "h/j/k/l move, 0-9 prio, o order, f flip, e edit, t time, m move, c child, s sibling, p parent, d delete, a settings",
+                "h/j/k/l move, 0-9 prio, o order, f flip, e edit, t time, m move, c child, s sibling, p parent, d delete, a settings, g games",
                 id="footer-help",
             )
 
@@ -789,6 +904,17 @@ class TodoApp(App):
             )
         )
 
+    def action_open_games(self) -> None:
+        self.push_screen(GamesModal(), callback=self._handle_game_selection)
+
+    def _handle_game_selection(self, selected_game: str | None) -> None:
+        if selected_game == "ipv4":
+            self.push_screen(IPv4GameModal(), callback=self._handle_ipv4_complete)
+
+    def _handle_ipv4_complete(self, success: bool | None) -> None:
+        if success:
+            self.push_screen(GamesModal(), callback=self._handle_game_selection)
+
     def set_show_done_today_only(self, value: bool) -> None:
         self.show_done_today_only = value
         set_bool_setting(
@@ -898,7 +1024,10 @@ class TodoApp(App):
         self.query_one(focus_list_id, ListView).focus()
 
     def on_key(self, event) -> None:
-        if isinstance(self.focused, Input):
+        if (
+            isinstance(self.focused, Input)
+            and getattr(self.focused, "id", None) == "new-task-input"
+        ):
             if event.key == "escape":
                 input_box = self.query_one("#new-task-input", Input)
                 input_box.value = ""
