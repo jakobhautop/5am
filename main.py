@@ -192,10 +192,15 @@ class GamesModal(ModalScreen[str | None]):
 
 class IPv4GameModal(ModalScreen[bool]):
     BINDINGS = [("escape", "close", "Close game")]
+    MAX_ATTEMPTS = 3
 
     def __init__(self) -> None:
         super().__init__()
         self.current_ip = ""
+        self.attempts = 0
+        self._blink_visible = True
+        self._blink_timer = None
+        self._blink_end_timer = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="games-modal"):
@@ -208,10 +213,13 @@ class IPv4GameModal(ModalScreen[bool]):
         self.start_round()
 
     def action_close(self) -> None:
+        self._stop_blink()
         self.dismiss(False)
 
     def start_round(self) -> None:
         self.current_ip = ".".join(str(randint(0, 255)) for _ in range(4))
+        self.attempts = 0
+        self._stop_blink()
         status = self.query_one("#ipv4-game-status", Label)
         ip_label = self.query_one("#ipv4-game-ip", Label)
         input_box = self.query_one("#ipv4-game-input", Input)
@@ -219,7 +227,7 @@ class IPv4GameModal(ModalScreen[bool]):
         ip_label.update(self.current_ip)
         input_box.value = ""
         input_box.disabled = True
-        self.set_timer(2, self._hide_ip)
+        self.set_timer(3, self._hide_ip)
 
     def _hide_ip(self) -> None:
         status = self.query_one("#ipv4-game-status", Label)
@@ -240,8 +248,41 @@ class IPv4GameModal(ModalScreen[bool]):
             event.input.disabled = True
             self.set_timer(1, lambda: self.dismiss(True))
             return
-        status.update("Not quite. Try again.")
+        self.attempts += 1
         event.input.value = ""
+        if self.attempts >= self.MAX_ATTEMPTS:
+            status.update("Final attempt missed. Revealing answer...")
+            self._start_blink(1, self.action_close)
+            return
+        status.update("Not quite. Revealing answer...")
+        self._start_blink(2, self._hide_ip)
+
+    def _start_blink(self, duration: float, on_complete) -> None:
+        input_box = self.query_one("#ipv4-game-input", Input)
+        input_box.disabled = True
+        self._stop_blink()
+        self._blink_visible = True
+        self.query_one("#ipv4-game-ip", Label).update(self.current_ip)
+        self._blink_timer = self.set_interval(0.25, self._toggle_blink)
+        self._blink_end_timer = self.set_timer(duration, lambda: self._finish_blink(on_complete))
+
+    def _finish_blink(self, on_complete) -> None:
+        self._stop_blink()
+        self.query_one("#ipv4-game-ip", Label).update(self.current_ip)
+        on_complete()
+
+    def _toggle_blink(self) -> None:
+        ip_label = self.query_one("#ipv4-game-ip", Label)
+        self._blink_visible = not self._blink_visible
+        ip_label.update(self.current_ip if self._blink_visible else "")
+
+    def _stop_blink(self) -> None:
+        if self._blink_timer:
+            self._blink_timer.stop()
+            self._blink_timer = None
+        if self._blink_end_timer:
+            self._blink_end_timer.stop()
+            self._blink_end_timer = None
 
 
 class TodoApp(App):
