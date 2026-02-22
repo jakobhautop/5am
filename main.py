@@ -246,7 +246,7 @@ class IPv4GameModal(ModalScreen[bool]):
         if typed == self.current_ip:
             status.update("🎉 Congrats! Correct answer.")
             event.input.disabled = True
-            self.set_timer(1, lambda: self.dismiss(True))
+            self.set_timer(1, self._dismiss_success)
             return
         self.attempts += 1
         event.input.value = ""
@@ -256,6 +256,9 @@ class IPv4GameModal(ModalScreen[bool]):
             return
         status.update("Not quite. Revealing answer...")
         self._start_blink(2, self._hide_ip)
+
+    def _dismiss_success(self) -> None:
+        self.dismiss(True)
 
     def _start_blink(self, duration: float, on_complete) -> None:
         input_box = self.query_one("#ipv4-game-input", Input)
