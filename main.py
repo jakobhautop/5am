@@ -114,12 +114,14 @@ class SettingsModal(ModalScreen[None]):
         show_done_items: bool,
         show_prioritized_only_ordered: bool,
         auto_game_on_complete: bool,
+        keep_game_dialog_open_after_complete: bool,
     ) -> None:
         super().__init__()
         self.show_done_today_only = show_done_today_only
         self.show_done_items = show_done_items
         self.show_prioritized_only_ordered = show_prioritized_only_ordered
         self.auto_game_on_complete = auto_game_on_complete
+        self.keep_game_dialog_open_after_complete = keep_game_dialog_open_after_complete
 
     def compose(self) -> ComposeResult:
         with Vertical(id="settings-modal"):
@@ -168,6 +170,15 @@ class SettingsModal(ModalScreen[None]):
                         value=self.auto_game_on_complete,
                         id="auto-game-on-complete-toggle",
                     )
+                with Horizontal(classes="settings-row"):
+                    yield Label(
+                        "Keep game dialog open after completing game",
+                        classes="settings-label",
+                    )
+                    yield Switch(
+                        value=self.keep_game_dialog_open_after_complete,
+                        id="keep-game-dialog-open-toggle",
+                    )
 
     def action_close(self) -> None:
         self.dismiss()
@@ -183,6 +194,8 @@ class SettingsModal(ModalScreen[None]):
                 app.set_show_prioritized_only_ordered(event.value)
             elif event.switch.id == "auto-game-on-complete-toggle":
                 app.set_auto_game_on_complete(event.value)
+            elif event.switch.id == "keep-game-dialog-open-toggle":
+                app.set_keep_game_dialog_open_after_complete(event.value)
 
 
 class GamesModal(ModalScreen[str | None]):
@@ -714,6 +727,11 @@ class TodoApp(App):
             "games.auto_on_complete",
             default=False,
         )
+        self.keep_game_dialog_open_after_complete = get_bool_setting(
+            self.connection,
+            "games.keep_dialog_open_after_complete",
+            default=False,
+        )
         self.focus_session: Optional[tuple[int, float, str]] = None
         self.pending_task: PendingTask | None = None
         self.pending_move: PendingMove | None = None
@@ -1145,6 +1163,7 @@ class TodoApp(App):
                 self.show_done_items,
                 self.show_prioritized_only_ordered,
                 self.auto_game_on_complete,
+                self.keep_game_dialog_open_after_complete,
             )
         )
 
@@ -1164,11 +1183,11 @@ class TodoApp(App):
             self.push_screen(NmapGameModal(), callback=self._handle_nmap_complete)
 
     def _handle_ipv4_complete(self, success: bool | None) -> None:
-        if success:
+        if success and self.keep_game_dialog_open_after_complete:
             self.push_screen(GamesModal(), callback=self._handle_game_selection)
 
     def _handle_nmap_complete(self, success: bool | None) -> None:
-        if success:
+        if success and self.keep_game_dialog_open_after_complete:
             self.push_screen(GamesModal(), callback=self._handle_game_selection)
 
     def set_show_done_today_only(self, value: bool) -> None:
@@ -1205,6 +1224,14 @@ class TodoApp(App):
         set_bool_setting(
             self.connection,
             "games.auto_on_complete",
+            value,
+        )
+
+    def set_keep_game_dialog_open_after_complete(self, value: bool) -> None:
+        self.keep_game_dialog_open_after_complete = value
+        set_bool_setting(
+            self.connection,
+            "games.keep_dialog_open_after_complete",
             value,
         )
 
