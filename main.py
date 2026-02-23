@@ -914,7 +914,7 @@ class TodoApp(App):
         self.refresh_lists()
         list_view.focus()
         if new_status == "done" and self.auto_game_on_complete:
-            self.push_screen(GamesModal(), callback=self._handle_game_selection)
+            self._open_random_game()
 
     def action_delete_item(self) -> None:
         list_view = self.get_active_list()
@@ -1107,6 +1107,12 @@ class TodoApp(App):
         self.push_screen(GamesModal(), callback=self._handle_game_selection)
 
     def _handle_game_selection(self, selected_game: str | None) -> None:
+        self._open_game(selected_game)
+
+    def _open_random_game(self) -> None:
+        self._open_game(choice(["ipv4", "nmap"]))
+
+    def _open_game(self, selected_game: str | None) -> None:
         if selected_game == "ipv4":
             self.push_screen(IPv4GameModal(), callback=self._handle_ipv4_complete)
         elif selected_game == "nmap":
