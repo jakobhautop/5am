@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import timedelta
-from random import randint
+from pathlib import Path
+from random import choice, randint, sample, shuffle
 from time import monotonic
 from typing import Optional
 
@@ -177,6 +179,7 @@ class GamesModal(ModalScreen[str | None]):
             with Vertical(classes="pane-box"):
                 with ListView(id="games-list"):
                     yield ListItem(Label("ipv4"))
+                    yield ListItem(Label("nmap"))
 
     def on_mount(self) -> None:
         self.query_one("#games-list", ListView).focus()
@@ -187,7 +190,8 @@ class GamesModal(ModalScreen[str | None]):
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if event.list_view.id != "games-list":
             return
-        self.dismiss("ipv4")
+        selected = event.item.query_one(Label).renderable
+        self.dismiss(str(selected))
 
 
 class IPv4GameModal(ModalScreen[bool]):
@@ -288,6 +292,108 @@ class IPv4GameModal(ModalScreen[bool]):
             self._blink_end_timer = None
 
 
+@dataclass
+class NmapGameEntry:
+    command: str
+    matches: list[str]
+    flags_and_protocol: str
+    red_team: str
+    blue_team: str
+    combo: list[str]
+
+
+class NmapGameModal(ModalScreen[bool]):
+    BINDINGS = [("escape", "close", "Close game")]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.entries = self._load_entries()
+        self.correct_entry: NmapGameEntry | None = None
+        self.options: list[str] = []
+        self.won = False
+        self.answered = False
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="games-modal"):
+            yield Label("nmap", id="games-modal-title")
+            yield Label("Choose the best command for the scenario", id="games-modal-subtitle")
+            yield Label("", id="nmap-game-question")
+            with Vertical(classes="pane-box"):
+                yield ListView(id="nmap-game-options")
+            yield Label("", id="nmap-game-result")
+            yield Label("", id="nmap-game-details")
+
+    def on_mount(self) -> None:
+        self._start_round()
+
+    def action_close(self) -> None:
+        self.dismiss(self.won)
+
+    def _load_entries(self) -> list[NmapGameEntry]:
+        game_file = Path(__file__).with_name("nmap_game.json")
+        raw_entries = json.loads(game_file.read_text(encoding="utf-8"))
+        return [NmapGameEntry(**entry) for entry in raw_entries]
+
+    def _start_round(self) -> None:
+        self.won = False
+        self.answered = False
+        self.correct_entry = choice(self.entries)
+        wrong_entries = sample(
+            [entry for entry in self.entries if entry.command != self.correct_entry.command],
+            k=2,
+        )
+        self.options = [self.correct_entry.command, *(entry.command for entry in wrong_entries)]
+        shuffle(self.options)
+        prompt = choice(self.correct_entry.matches)
+
+        question = self.query_one("#nmap-game-question", Label)
+        result = self.query_one("#nmap-game-result", Label)
+        details = self.query_one("#nmap-game-details", Label)
+        options = self.query_one("#nmap-game-options", ListView)
+
+        question.update(f"Scenario: {prompt}")
+        result.update("Pick one option and press Enter")
+        details.update("")
+        options.clear()
+        for option in self.options:
+            options.append(ListItem(Label(option)))
+        options.focus()
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        if event.list_view.id != "nmap-game-options" or self.answered:
+            return
+        index = event.list_view.index
+        if index is None or self.correct_entry is None:
+            return
+        selected_command = self.options[index]
+        if selected_command == self.correct_entry.command:
+            result_text = "✅ Success — you won!"
+            self.won = True
+        else:
+            result_text = "❌ Failed — wrong choice."
+            self.won = False
+        self.answered = True
+        result = self.query_one("#nmap-game-result", Label)
+        result.update(f"{result_text} Press Esc to close.")
+        self._show_explanation()
+
+    def _show_explanation(self) -> None:
+        if self.correct_entry is None:
+            return
+        details = self.query_one("#nmap-game-details", Label)
+        combo_text = ", ".join(self.correct_entry.combo)
+        details.update(
+            "\n".join(
+                [
+                    f"Flags & protocol: {self.correct_entry.flags_and_protocol}",
+                    f"Red team: {self.correct_entry.red_team}",
+                    f"Blue team: {self.correct_entry.blue_team}",
+                    f"Combos: {combo_text}",
+                ]
+            )
+        )
+
+
 class TodoApp(App):
     CSS = """
     Screen {
@@ -307,6 +413,9 @@ class TodoApp(App):
         align: center middle;
     }
     IPv4GameModal {
+        align: center middle;
+    }
+    NmapGameModal {
         align: center middle;
     }
     #lists {
@@ -427,6 +536,20 @@ class TodoApp(App):
     #ipv4-game-input {
         border: solid #3a3a3a;
         background: transparent;
+    }
+    #nmap-game-question {
+        color: #d0d0d0;
+        margin: 1 0;
+        text-wrap: wrap;
+    }
+    #nmap-game-result {
+        margin-top: 1;
+        color: #f0f0f0;
+    }
+    #nmap-game-details {
+        margin-top: 1;
+        color: #a0a0a0;
+        text-wrap: wrap;
     }
     ListView > ListItem {
         padding: 0 1;
@@ -954,8 +1077,14 @@ class TodoApp(App):
     def _handle_game_selection(self, selected_game: str | None) -> None:
         if selected_game == "ipv4":
             self.push_screen(IPv4GameModal(), callback=self._handle_ipv4_complete)
+        elif selected_game == "nmap":
+            self.push_screen(NmapGameModal(), callback=self._handle_nmap_complete)
 
     def _handle_ipv4_complete(self, success: bool | None) -> None:
+        if success:
+            self.push_screen(GamesModal(), callback=self._handle_game_selection)
+
+    def _handle_nmap_complete(self, success: bool | None) -> None:
         if success:
             self.push_screen(GamesModal(), callback=self._handle_game_selection)
 

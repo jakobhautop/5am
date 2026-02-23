@@ -1,0 +1,98 @@
+[
+  {
+    "command": "nmap -sV 192.168.56.11",
+    "matches": [
+      "I want to detect service versions running on open ports",
+      "I want to identify which software and versions are exposed"
+    ],
+    "flags_and_protocol": "-sV enables service and version detection. After discovering open ports, Nmap sends protocol-specific probes and analyzes responses to determine the service type and version.",
+    "red_team": "Useful for identifying exact software versions to map against known vulnerabilities (e.g., outdated Apache, OpenSSH). Often combined with -sC or -A for deeper enumeration.",
+    "blue_team": "Generates unusual or malformed service requests visible in application logs. IDS/IPS may detect version probing signatures. Repeated banner-grabbing behavior can indicate reconnaissance.",
+    "combo": [
+      "-sC for default script scan",
+      "-A for OS + version + script + traceroute",
+      "-p- to scan all TCP ports",
+      "-T4 to increase scan speed"
+    ]
+  },
+  {
+    "command": "nmap -O 192.168.56.12",
+    "matches": [
+      "I want to detect the operating system of a target",
+      "I want to fingerprint the OS remotely"
+    ],
+    "flags_and_protocol": "-O enables OS detection. Nmap sends specially crafted TCP/IP probes and compares responses against its fingerprint database.",
+    "red_team": "Helps tailor exploits and payloads to the correct OS. Reduces guesswork when planning privilege escalation or lateral movement.",
+    "blue_team": "Detected as abnormal TCP packets with unusual flag combinations. IDS tools can flag OS fingerprinting attempts based on known probe patterns.",
+    "combo": [
+      "-sV for service + OS detection",
+      "--osscan-guess for more aggressive OS guessing",
+      "-A for full aggressive scan",
+      "-Pn if host discovery is blocked"
+    ]
+  },
+  {
+    "command": "nmap -Pn 192.168.56.13",
+    "matches": [
+      "I want to skip host discovery",
+      "I want to scan a host that blocks ICMP"
+    ],
+    "flags_and_protocol": "-Pn disables host discovery and assumes the host is up. Nmap skips ICMP echo, TCP ACK, and other discovery probes and directly performs port scanning.",
+    "red_team": "Useful when firewalls block ping (ICMP). Prevents false negatives where a host appears down but actually isn’t.",
+    "blue_team": "Port scan activity begins without prior ICMP traffic. Monitoring systems may detect direct scanning behavior without standard discovery patterns.",
+    "combo": [
+      "-sS for SYN scan without host discovery",
+      "-sV for version detection on assumed-up host",
+      "-p- for full port scan",
+      "-T4 for faster execution"
+    ]
+  },
+  {
+    "command": "nmap -sU 192.168.56.14",
+    "matches": [
+      "I want to scan UDP ports",
+      "I want to discover open UDP services like DNS or SNMP"
+    ],
+    "flags_and_protocol": "-sU performs a UDP scan. Nmap sends UDP packets to target ports and interprets ICMP 'port unreachable' responses or lack of response to determine port state.",
+    "red_team": "Important for discovering services like DNS (53), SNMP (161), or NTP (123) that are often overlooked. Slower and noisier than TCP scans.",
+    "blue_team": "Visible as UDP probes to multiple ports. Firewalls log repeated UDP attempts and ICMP unreachable replies. High UDP sweep activity may trigger alerts.",
+    "combo": [
+      "-sS to scan TCP + UDP together",
+      "-p 53,161,123 to target common UDP services",
+      "-sV for UDP service version detection",
+      "--top-ports 100 for faster UDP discovery"
+    ]
+  },
+  {
+    "command": "nmap -D RND:5 192.168.56.15",
+    "matches": [
+      "I want to use decoy IP addresses",
+      "I want to obscure the real source of my scan"
+    ],
+    "flags_and_protocol": "-D specifies decoy IP addresses. RND:5 generates 5 random decoys. The target sees scan traffic appearing to originate from multiple IPs.",
+    "red_team": "Adds noise to make attribution harder. Can confuse simple logging systems that do not correlate traffic patterns deeply.",
+    "blue_team": "Multiple apparent sources scanning simultaneously is suspicious. Advanced monitoring can correlate timing patterns to identify the true scanning host.",
+    "combo": [
+      "-sS for stealth SYN scan with decoys",
+      "-Pn to skip host discovery while using decoys",
+      "-p- to perform a full port sweep",
+      "-T4 to increase scan aggressiveness"
+    ]
+  },
+  {
+    "command": "nmap -p- -T4 192.168.56.16",
+    "matches": [
+      "I want to scan all ports quickly",
+      "I want to increase scan speed"
+    ],
+    "flags_and_protocol": "-p- scans all 65535 TCP ports. -T4 increases timing aggressiveness, reducing delays between probes and speeding up the scan.",
+    "red_team": "Useful during lab or internal assessments when speed matters. Higher timing can increase detection risk.",
+    "blue_team": "Large volume of connection attempts across all ports in a short time window. Easily detectable by rate-based monitoring and port sweep alerts.",
+    "combo": [
+      "-sV to detect service versions on all ports",
+      "-O for OS fingerprinting",
+      "-Pn to skip host discovery",
+      "-A for comprehensive aggressive scan"
+    ]
+  }
+]
