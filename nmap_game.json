@@ -38,7 +38,7 @@
       "I want to scan a host that blocks ICMP"
     ],
     "flags_and_protocol": "-Pn disables host discovery and assumes the host is up. Nmap skips ICMP echo, TCP ACK, and other discovery probes and directly performs port scanning.",
-    "red_team": "Useful when firewalls block ping (ICMP). Prevents false negatives where a host appears down but actually isn’t.",
+    "red_team": "Useful when firewalls block ping (ICMP). Prevents false negatives where a host appears down but actually isn\u2019t.",
     "blue_team": "Port scan activity begins without prior ICMP traffic. Monitoring systems may detect direct scanning behavior without standard discovery patterns.",
     "combo": [
       "-sS for SYN scan without host discovery",
@@ -93,6 +93,86 @@
       "-O for OS fingerprinting",
       "-Pn to skip host discovery",
       "-A for comprehensive aggressive scan"
+    ]
+  },
+  {
+    "command": "nmap -sn TARGETS",
+    "matches": [
+      "I only want host discovery without a port scan",
+      "I want to quickly find which targets are up"
+    ],
+    "flags_and_protocol": "-sn performs host discovery only (ping scan) and skips port scanning. Nmap uses its default host discovery probes (ARP on local subnet, plus ICMP/TCP probes depending on privileges and network context).",
+    "red_team": "Fast way to build an initial live-host list before deeper enumeration. Useful for reducing scan noise and focusing later scans on online systems.",
+    "blue_team": "Appears as broad discovery traffic with limited follow-up ports. Defenders can detect sweeps that enumerate many hosts in a short period.",
+    "combo": [
+      "-PR -sn for explicit ARP discovery on local subnet",
+      "-PE -sn for ICMP echo discovery",
+      "-PP -sn for ICMP timestamp discovery",
+      "-PM -sn for ICMP address mask discovery"
+    ]
+  },
+  {
+    "command": "nmap -PR -sn MACHINE_IP/24",
+    "matches": [
+      "I want to discover live hosts on my local subnet using ARP",
+      "I need reliable host discovery on a LAN where ICMP may be filtered"
+    ],
+    "flags_and_protocol": "-PR tells Nmap to use ARP requests for host discovery; -sn skips port scanning. ARP is link-layer and typically very reliable for local-network live-host detection. This focuses on Nmap ARP discovery (not the separate arp-scan tool, which can provide similar ARP-based sweeps).",
+    "red_team": "Excellent first step on an internal segment: ARP replies identify live neighbors even when host firewalls block ICMP echo. Great for quickly mapping a /24.",
+    "blue_team": "Produces bursts of ARP who-has requests across the subnet. Network monitoring can flag unusual ARP sweep behavior as reconnaissance.",
+    "combo": [
+      "-sn to keep discovery-only behavior",
+      "-PE -sn to compare ICMP echo results",
+      "-PP -sn to test timestamp responses",
+      "-PM -sn to test address mask responses"
+    ]
+  },
+  {
+    "command": "nmap -PE -sn MACHINE_IP/24",
+    "matches": [
+      "I want to discover live hosts using ICMP echo requests",
+      "I want a ping sweep with Nmap"
+    ],
+    "flags_and_protocol": "-PE uses ICMP Echo Request (Type 8) for host discovery and expects Echo Reply (Type 0). -sn ensures Nmap does not continue with a port scan.",
+    "red_team": "Useful for broad ping sweeps, but results can miss hosts behind firewalls that drop ICMP echo.",
+    "blue_team": "Visible as ICMP echo sweep traffic. Many security tools detect sequential ping activity across subnets.",
+    "combo": [
+      "-sn for host discovery only",
+      "-PR -sn for local-subnet ARP discovery",
+      "-PP -sn for ICMP timestamp probes",
+      "-PM -sn for ICMP address mask probes"
+    ]
+  },
+  {
+    "command": "nmap -PP -sn MACHINE_IP/24",
+    "matches": [
+      "I want to discover live hosts with ICMP timestamp requests",
+      "ICMP echo is blocked and I want another ICMP host-discovery method"
+    ],
+    "flags_and_protocol": "-PP sends ICMP Timestamp Request (Type 13) and looks for Timestamp Reply (Type 14). With -sn, Nmap performs host discovery without port scanning.",
+    "red_team": "Alternative discovery method when echo responses are filtered but timestamp replies are still permitted.",
+    "blue_team": "Can look suspicious because timestamp probes are less common in normal traffic. Detection rules often treat this as reconnaissance.",
+    "combo": [
+      "-sn to avoid port scan phase",
+      "-PE -sn for ICMP echo discovery",
+      "-PM -sn for ICMP address mask discovery",
+      "-PR -sn for LAN ARP discovery"
+    ]
+  },
+  {
+    "command": "nmap -PM -sn MACHINE_IP/24",
+    "matches": [
+      "I want to discover live hosts with ICMP address mask requests",
+      "I want another ICMP-based host discovery option"
+    ],
+    "flags_and_protocol": "-PM sends ICMP Address Mask Request (Type 17) and waits for Address Mask Reply (Type 18). -sn keeps the scan in host-discovery mode only.",
+    "red_team": "Niche but useful when testing multiple discovery paths to avoid false negatives from filtered ICMP echo.",
+    "blue_team": "Address mask probes are uncommon and often stand out in telemetry, making them useful for early reconnaissance detection.",
+    "combo": [
+      "-sn for no port scan",
+      "-PE -sn for echo-request discovery",
+      "-PP -sn for timestamp discovery",
+      "-PR -sn for reliable local ARP host discovery"
     ]
   }
 ]
