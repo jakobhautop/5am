@@ -205,8 +205,17 @@ class GamesModal(ModalScreen[str | None]):
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if event.list_view.id != "games-list":
             return
-        selected = event.item.query_one(Label).renderable
-        self.dismiss(str(selected))
+        index = event.list_view.index
+        if index is None:
+            self.dismiss(None)
+            return
+
+        game_names = ["ipv4", "nmap"]
+        if 0 <= index < len(game_names):
+            self.dismiss(game_names[index])
+            return
+
+        self.dismiss(None)
 
 
 class IPv4GameModal(ModalScreen[bool]):
