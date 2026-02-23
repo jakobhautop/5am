@@ -112,11 +112,13 @@ class SettingsModal(ModalScreen[None]):
         show_done_today_only: bool,
         show_done_items: bool,
         show_prioritized_only_ordered: bool,
+        auto_game_on_complete: bool,
     ) -> None:
         super().__init__()
         self.show_done_today_only = show_done_today_only
         self.show_done_items = show_done_items
         self.show_prioritized_only_ordered = show_prioritized_only_ordered
+        self.auto_game_on_complete = auto_game_on_complete
 
     def compose(self) -> ComposeResult:
         with Vertical(id="settings-modal"):
@@ -154,6 +156,17 @@ class SettingsModal(ModalScreen[None]):
                         value=self.show_prioritized_only_ordered,
                         id="ordered-priority-toggle",
                     )
+            yield Label("Games", classes="settings-heading")
+            with Container(classes="settings-box"):
+                with Horizontal(classes="settings-row"):
+                    yield Label(
+                        "Auto game on complete",
+                        classes="settings-label",
+                    )
+                    yield Switch(
+                        value=self.auto_game_on_complete,
+                        id="auto-game-on-complete-toggle",
+                    )
 
     def action_close(self) -> None:
         self.dismiss()
@@ -167,6 +180,8 @@ class SettingsModal(ModalScreen[None]):
                 app.set_show_done_items(event.value)
             elif event.switch.id == "ordered-priority-toggle":
                 app.set_show_prioritized_only_ordered(event.value)
+            elif event.switch.id == "auto-game-on-complete-toggle":
+                app.set_auto_game_on_complete(event.value)
 
 
 class GamesModal(ModalScreen[str | None]):
@@ -640,6 +655,11 @@ class TodoApp(App):
             "ordered.show_prioritized_only",
             default=True,
         )
+        self.auto_game_on_complete = get_bool_setting(
+            self.connection,
+            "games.auto_on_complete",
+            default=False,
+        )
         self.focus_session: Optional[tuple[int, float, str]] = None
         self.pending_task: PendingTask | None = None
         self.pending_move: PendingMove | None = None
@@ -884,6 +904,8 @@ class TodoApp(App):
         update_status(self.connection, item.todo_id, new_status)
         self.refresh_lists()
         list_view.focus()
+        if new_status == "done" and self.auto_game_on_complete:
+            self.push_screen(GamesModal(), callback=self._handle_game_selection)
 
     def action_delete_item(self) -> None:
         list_view = self.get_active_list()
@@ -1068,6 +1090,7 @@ class TodoApp(App):
                 self.show_done_today_only,
                 self.show_done_items,
                 self.show_prioritized_only_ordered,
+                self.auto_game_on_complete,
             )
         )
 
@@ -1116,6 +1139,14 @@ class TodoApp(App):
             value,
         )
         self.refresh_lists()
+
+    def set_auto_game_on_complete(self, value: bool) -> None:
+        self.auto_game_on_complete = value
+        set_bool_setting(
+            self.connection,
+            "games.auto_on_complete",
+            value,
+        )
 
     def sort_order_after_index(self, items: list[TodoListItem], index: int) -> float:
         prev_order = items[index].sort_order
