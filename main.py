@@ -186,7 +186,11 @@ class SettingsModal(ModalScreen[None]):
 
 
 class GamesModal(ModalScreen[str | None]):
-    BINDINGS = [("escape", "close", "Close games")]
+    BINDINGS = [
+        ("escape", "close", "Close games"),
+        ("j", "move_down", "Move down"),
+        ("k", "move_up", "Move up"),
+    ]
 
     def compose(self) -> ComposeResult:
         with Vertical(id="games-modal"):
@@ -202,6 +206,18 @@ class GamesModal(ModalScreen[str | None]):
 
     def action_close(self) -> None:
         self.dismiss(None)
+
+    def action_move_down(self) -> None:
+        games_list = self.query_one("#games-list", ListView)
+        move = getattr(games_list, "action_cursor_down", None)
+        if move:
+            move()
+
+    def action_move_up(self) -> None:
+        games_list = self.query_one("#games-list", ListView)
+        move = getattr(games_list, "action_cursor_up", None)
+        if move:
+            move()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if event.list_view.id != "games-list":
@@ -328,7 +344,11 @@ class NmapGameEntry:
 
 
 class NmapGameModal(ModalScreen[bool]):
-    BINDINGS = [("escape", "close", "Close game")]
+    BINDINGS = [
+        ("escape", "close", "Close game"),
+        ("j", "move_down", "Move down"),
+        ("k", "move_up", "Move up"),
+    ]
 
     def __init__(self) -> None:
         super().__init__()
@@ -353,6 +373,18 @@ class NmapGameModal(ModalScreen[bool]):
 
     def action_close(self) -> None:
         self.dismiss(self.won)
+
+    def action_move_down(self) -> None:
+        options = self.query_one("#nmap-game-options", ListView)
+        move = getattr(options, "action_cursor_down", None)
+        if move:
+            move()
+
+    def action_move_up(self) -> None:
+        options = self.query_one("#nmap-game-options", ListView)
+        move = getattr(options, "action_cursor_up", None)
+        if move:
+            move()
 
     def _load_entries(self) -> list[NmapGameEntry]:
         candidate_files = [
@@ -576,6 +608,7 @@ class TodoApp(App):
         color: #d0d0d0;
         margin: 1 0;
         text-wrap: wrap;
+        width: 100%;
     }
     #nmap-game-result {
         margin-top: 1;
@@ -585,6 +618,7 @@ class TodoApp(App):
         margin-top: 1;
         color: #a0a0a0;
         text-wrap: wrap;
+        width: 100%;
     }
     ListView > ListItem {
         padding: 0 1;
