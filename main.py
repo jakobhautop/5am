@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sysconfig
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -354,7 +355,17 @@ class NmapGameModal(ModalScreen[bool]):
         self.dismiss(self.won)
 
     def _load_entries(self) -> list[NmapGameEntry]:
-        game_file = Path(__file__).with_name("nmap_game.json")
+        candidate_files = [
+            Path(__file__).with_name("nmap_game.json"),
+            Path(sysconfig.get_path("data")) / "nmap_game.json",
+            Path.cwd() / "nmap_game.json",
+        ]
+        game_file = next((path for path in candidate_files if path.exists()), None)
+        if game_file is None:
+            raise FileNotFoundError(
+                "Could not find nmap_game.json. Checked: "
+                + ", ".join(str(path) for path in candidate_files)
+            )
         raw_entries = json.loads(game_file.read_text(encoding="utf-8"))
         return [NmapGameEntry(**entry) for entry in raw_entries]
 
