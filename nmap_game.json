@@ -174,5 +174,73 @@
       "-PP -sn for timestamp discovery",
       "-PR -sn for reliable local ARP host discovery"
     ]
+  },
+  {
+    "command": "nmap -PS -sn MACHINE_IP/24",
+    "matches": [
+      "I want to discover live hosts with TCP SYN ping",
+      "Which TCP ping scan does not require a privileged account",
+      "I want Nmap to send SYN probes for host discovery"
+    ],
+    "flags_and_protocol": "-PS sends TCP SYN probes (default port 80 unless you specify ports) and -sn keeps the scan in host-discovery mode only. A SYN/ACK or RST response indicates the host is up. Unprivileged users can still run SYN ping, but if the port is open they typically complete the TCP handshake.",
+    "red_team": "Good when ICMP is filtered but TCP services are reachable. Can quickly identify live systems before deeper scanning.",
+    "blue_team": "Shows many SYN probes across hosts, often to port 80. Detection systems can flag this as reconnaissance when probes fan out over a subnet.",
+    "combo": [
+      "-PS21 to probe the telnet port specifically",
+      "-PS21-25 to probe a range of TCP ports",
+      "-PS80,443,8080 to probe multiple common web ports",
+      "-sn to avoid immediately moving into a full port scan"
+    ]
+  },
+  {
+    "command": "sudo nmap -PA -sn MACHINE_IP/24",
+    "matches": [
+      "I want to discover live hosts with TCP ACK ping",
+      "Which TCP ping scan requires a privileged account",
+      "I want to send ACK probes for host discovery"
+    ],
+    "flags_and_protocol": "-PA sends TCP ACK probes (default port 80 if omitted), and a RST response usually indicates the host is online. Running as a privileged user is recommended so Nmap can send raw ACK probes as intended.",
+    "red_team": "Useful for host discovery in environments where standard ping is filtered but TCP stacks still answer unexpected ACK packets.",
+    "blue_team": "Creates unusual ACK-only traffic that is not part of established sessions. This pattern is often suspicious in IDS/IPS telemetry.",
+    "combo": [
+      "-PA21 to probe the telnet port with ACK ping",
+      "-PA21-25 for an ACK ping range",
+      "-PA80,443,8080 for a multi-port ACK ping",
+      "-sn to keep discovery-only behavior"
+    ]
+  },
+  {
+    "command": "sudo nmap -PU -sn MACHINE_IP/24",
+    "matches": [
+      "I want to discover live hosts with UDP ping",
+      "I want to use UDP host discovery instead of TCP",
+      "I want Nmap to trigger ICMP port unreachable replies"
+    ],
+    "flags_and_protocol": "-PU sends UDP probes for host discovery and -sn skips port scanning. Closed UDP ports often return ICMP destination unreachable (port unreachable), which reveals that the host is alive.",
+    "red_team": "Helpful where TCP/ICMP probes are restricted. UDP-based discovery can find hosts that respond differently to closed UDP ports.",
+    "blue_team": "Can generate many UDP probes to uncommon ports plus ICMP unreachable replies. This is a recognizable reconnaissance signature.",
+    "combo": [
+      "-PU53 for DNS-focused UDP ping",
+      "-PU67,68 for DHCP-related UDP ping probes",
+      "-PU161 for SNMP-oriented discovery",
+      "-sn to keep it as host discovery only"
+    ]
+  },
+  {
+    "command": "masscan MACHINE_IP/24 --top-ports 100",
+    "matches": [
+      "I want a very fast scan like Nmap host discovery workflows",
+      "I want to use masscan for aggressive network discovery",
+      "I want to scan top ports quickly across a subnet"
+    ],
+    "flags_and_protocol": "Masscan is a high-speed asynchronous scanner. --top-ports 100 targets the most common ports and can discover reachable services rapidly; unlike standard Nmap defaults, Masscan is designed for extreme packet rates.",
+    "red_team": "Great for rapid initial mapping at scale. You can quickly identify responsive hosts/services before validating results with Nmap.",
+    "blue_team": "Very bursty packet behavior is easy to spot. Rate-based alerts and perimeter monitoring often catch masscan activity quickly.",
+    "combo": [
+      "-p443 to test a single port quickly",
+      "-p80,443 for common web services",
+      "-p22-25 for small range sweeps",
+      "--rate 1000 to control aggressiveness"
+    ]
   }
 ]
