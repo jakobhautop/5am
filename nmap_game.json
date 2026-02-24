@@ -227,6 +227,57 @@
     ]
   },
   {
+    "command": "nmap -n -PE -sn 10.42.0.0/24",
+    "matches": [
+      "I want to find live hosts with ICMP echo but avoid all reverse-DNS requests",
+      "I need a fast ping sweep and do not want hostnames resolved",
+      "Which command performs host discovery and keeps output in raw IP format"
+    ],
+    "flags_and_protocol": "-PE sends ICMP Echo Requests for host discovery. -sn keeps the scan in discovery-only mode. -n disables DNS lookups, so Nmap does not perform PTR (reverse-DNS) queries for discovered addresses.",
+    "red_team": "Great for quick internal mapping when DNS logging is heavily monitored. You still identify live systems while reducing resolver-side artifacts.",
+    "blue_team": "You may see ICMP sweep activity without corresponding DNS PTR lookups. Correlating probe traffic with absent resolver telemetry can flag stealthier reconnaissance.",
+    "combo": [
+      "-PP -sn -n for ICMP timestamp discovery without DNS",
+      "-PS443 -sn -n when ICMP echo is filtered",
+      "-PR -sn -n for local-subnet ARP discovery only",
+      "-T4 to speed up broad lab sweeps"
+    ]
+  },
+  {
+    "command": "nmap -R -sn 172.20.14.0/24",
+    "matches": [
+      "I want host discovery and I also want hostnames resolved for every target",
+      "I need reverse-DNS names even when some systems do not answer probes",
+      "Which option forces DNS resolution for all target IPs during a ping scan"
+    ],
+    "flags_and_protocol": "-sn performs host discovery only. -R tells Nmap to always resolve names, including reverse-DNS lookups for target IPs that appear down, which can reveal inventory naming conventions.",
+    "red_team": "Useful when hostnames help triage targets (e.g., app, backup, dc). It provides richer context before port scanning, but increases DNS visibility.",
+    "blue_team": "Burst PTR-query patterns across a subnet can be high-confidence recon. DNS monitoring can catch this even if many hosts block ping probes.",
+    "combo": [
+      "--dns-servers 10.20.0.53,10.20.0.54 to use internal resolvers",
+      "-sL -R for name resolution without active probing",
+      "-n when you explicitly want to suppress all DNS resolution",
+      "-PE -sn to pair forced DNS with ICMP echo discovery"
+    ]
+  },
+  {
+    "command": "nmap -sL -R --dns-servers 9.9.9.9,1.1.1.1 192.0.2.0/28",
+    "matches": [
+      "I want to enumerate targets and collect reverse-DNS names without sending port probes",
+      "I want to test how a specific resolver pair answers PTR records for a range",
+      "Which command performs a list scan while forcing reverse-DNS using chosen DNS servers"
+    ],
+    "flags_and_protocol": "-sL is list scan mode: it does not probe host ports and mainly enumerates targets. With -R, Nmap forces reverse-DNS lookups for each target, and --dns-servers selects the resolver IPs used for those queries.",
+    "red_team": "Helpful for passive target profiling before noisy scans. You can infer business roles from names while minimizing direct interaction with endpoints.",
+    "blue_team": "Even without host probes, unusual high-volume PTR lookups from one source can indicate pre-attack reconnaissance. DNS logs become the primary detection surface.",
+    "combo": [
+      "-sL -n to list targets without any DNS queries",
+      "-sn -R to add live-host testing plus forced reverse-DNS",
+      "--resolve-all with -sL for broader name-resolution attempts",
+      "-v for more verbose list-scan output"
+    ]
+  },
+  {
     "command": "masscan MACHINE_IP/24 --top-ports 100",
     "matches": [
       "I want a very fast scan like Nmap host discovery workflows",
