@@ -1,0 +1,130 @@
+[
+  {
+    "tool": "metasploit",
+    "matches": [
+      "You found a known vulnerable service and want a guided exploitation workflow with payload options",
+      "You see an old SMB service likely vulnerable to a public CVE, what tool do you use?",
+      "What tool do I use to quickly search exploit modules and launch post-exploitation sessions?"
+    ],
+    "flags_and_protocol": "Metasploit is a framework for exploit selection, payload delivery, session handling, and post-exploitation automation rather than simple one-off probing.",
+    "red_team": "Great when you need repeatable exploitation chains, payload management, and built-in auxiliary scanners in one place.",
+    "blue_team": "Detectable through exploit signatures, suspicious callback traffic, and process behavior from payload execution.",
+    "combo": [
+      "nmap for service/version discovery first",
+      "searchsploit to validate exploit availability",
+      "meterpreter post modules for local enumeration"
+    ]
+  },
+  {
+    "tool": "hydra",
+    "matches": [
+      "You have a username list and password list and need to test login brute-force on SSH",
+      "You see a web login panel and want to perform credential spraying, what tool do you use?",
+      "What tool do I use for fast online password attacks against network services?"
+    ],
+    "flags_and_protocol": "Hydra is specialized for parallelized online authentication attacks across protocols like SSH, FTP, RDP, SMB, and HTTP forms.",
+    "red_team": "Useful for validating weak credentials and password reuse across multiple services quickly.",
+    "blue_team": "Produces repeated failed login attempts, lockout patterns, and high-rate auth noise in logs.",
+    "combo": [
+      "nmap to identify exposed auth services",
+      "wordlists from seclists",
+      "burp for detailed web form inspection before hydra http-post-form"
+    ]
+  },
+  {
+    "tool": "nikto",
+    "matches": [
+      "You want a quick web server misconfiguration and known dangerous file scan",
+      "You see a target web server and want to check for insecure headers and outdated components, what tool do you use?",
+      "What tool do I use for broad web server checks with many built-in tests?"
+    ],
+    "flags_and_protocol": "Nikto focuses on web server assessments: dangerous files, insecure defaults, outdated versions, and common misconfigurations.",
+    "red_team": "Good early-stage recon to quickly map low-hanging web weaknesses before manual validation.",
+    "blue_team": "Noisy request patterns and signature-like probes make it relatively easy to detect in web logs and WAF telemetry.",
+    "combo": [
+      "nmap -sV to identify web stack first",
+      "gobuster/ffuf for deeper content discovery",
+      "manual validation in browser or burp"
+    ]
+  },
+  {
+    "tool": "sqlmap",
+    "matches": [
+      "You confirmed a parameter may be SQL injectable and want automated SQLi testing and exploitation",
+      "You see odd SQL error behavior on a URL parameter, what tool do you use?",
+      "What tool do I use to enumerate databases once SQL injection is suspected?"
+    ],
+    "flags_and_protocol": "sqlmap automates SQL injection detection, DB fingerprinting, data extraction, and advanced techniques like time-based and boolean-based inference.",
+    "red_team": "Best when you need reliable SQLi validation and scalable extraction rather than manual payload guessing.",
+    "blue_team": "Can cause abnormal query patterns, time-delay payloads, and repeated tamper-like requests visible in app and DB logs.",
+    "combo": [
+      "burp to capture exact request",
+      "sqlmap -r request.txt for accuracy",
+      "waf-aware tamper scripts when appropriate"
+    ]
+  },
+  {
+    "tool": "gobuster",
+    "matches": [
+      "You want to brute-force hidden web directories and files with a wordlist",
+      "You see a basic web app and need fast directory enumeration, what tool do you use?",
+      "What tool do I use for DNS, vhost, or directory brute-forcing in a simple CLI workflow?"
+    ],
+    "flags_and_protocol": "gobuster is optimized for wordlist-based brute-forcing against directories, DNS subdomains, and virtual hosts.",
+    "red_team": "Fast and straightforward for discovering unlinked content that expands attack surface.",
+    "blue_team": "Generates high-volume 404/403 patterns and repeated path probing that stands out in HTTP logs.",
+    "combo": [
+      "use status-code filtering",
+      "pair with nikto for server checks",
+      "follow findings in burp/manual testing"
+    ]
+  },
+  {
+    "tool": "dirb",
+    "matches": [
+      "You want classic web content brute-forcing with built-in defaults and simple output",
+      "You see a CTF-style web target and need a quick directory brute-force tool, what tool do you use?",
+      "What tool do I use for old-school directory busting when I want minimal setup?"
+    ],
+    "flags_and_protocol": "dirb is a traditional web content scanner for directories/files using wordlists and extension-based guessing.",
+    "red_team": "Useful for lightweight engagements and training labs where quick, simple directory discovery is enough.",
+    "blue_team": "Like other brute-force enumeration tools, it creates repetitive path requests and can trigger rate/behavior alerts.",
+    "combo": [
+      "custom wordlists for target tech",
+      "extension tuning for php/aspx/jsp",
+      "validate discovered endpoints manually"
+    ]
+  },
+  {
+    "tool": "ffuf",
+    "matches": [
+      "You need flexible fuzzing for paths, parameters, headers, or virtual hosts with high performance",
+      "You see an API and want to fuzz hidden endpoints and parameter names, what tool do you use?",
+      "What tool do I use when I need advanced filtering/matching while brute-forcing web content?"
+    ],
+    "flags_and_protocol": "ffuf is a fast web fuzzer with powerful matchers/filters for status codes, word counts, response sizes, and regex.",
+    "red_team": "Excellent for precision discovery where you must reduce noise and find subtle differences in responses.",
+    "blue_team": "Large bursts of crafted requests with varied payloads are visible and often trigger WAF/anomaly systems.",
+    "combo": [
+      "-mc/-fc for status filtering",
+      "-fs/-fw for size/word filtering",
+      "use recursion carefully on large targets"
+    ]
+  },
+  {
+    "tool": "nmap",
+    "matches": [
+      "You are at the beginning of an engagement and need to identify open ports and services",
+      "You see only an IP and need host/service discovery first, what tool do you use?",
+      "What tool do I use for network reconnaissance and service/version scanning?"
+    ],
+    "flags_and_protocol": "Nmap is the baseline network recon tool for host discovery, port scanning, service detection, OS fingerprinting, and NSE scripts.",
+    "red_team": "Usually the first technical step to map reachable attack surface before choosing exploitation or web tooling.",
+    "blue_team": "Creates recognizable scanning patterns such as sequential probes across many ports/hosts.",
+    "combo": [
+      "-sV for service versions",
+      "-p- for full TCP port sweep",
+      "-sC or --script for NSE enumeration"
+    ]
+  }
+]

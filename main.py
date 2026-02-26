@@ -213,6 +213,7 @@ class GamesModal(ModalScreen[str | None]):
                 with ListView(id="games-list"):
                     yield ListItem(Label("ipv4"))
                     yield ListItem(Label("nmap"))
+                    yield ListItem(Label("cli"))
 
     def on_mount(self) -> None:
         self.query_one("#games-list", ListView).focus()
@@ -240,7 +241,7 @@ class GamesModal(ModalScreen[str | None]):
             self.dismiss(None)
             return
 
-        game_names = ["ipv4", "nmap"]
+        game_names = ["ipv4", "nmap", "cli"]
         if 0 <= index < len(game_names):
             self.dismiss(game_names[index])
             return
@@ -349,6 +350,16 @@ class IPv4GameModal(ModalScreen[bool]):
 @dataclass
 class NmapGameEntry:
     command: str
+    matches: list[str]
+    flags_and_protocol: str
+    red_team: str
+    blue_team: str
+    combo: list[str]
+
+
+@dataclass
+class CliGameEntry:
+    tool: str
     matches: list[str]
     flags_and_protocol: str
     red_team: str
@@ -466,6 +477,124 @@ class NmapGameModal(ModalScreen[bool]):
             "\n".join(
                 [
                     f"Flags & protocol: {self.correct_entry.flags_and_protocol}",
+                    f"Red team: {self.correct_entry.red_team}",
+                    f"Blue team: {self.correct_entry.blue_team}",
+                    f"Combos: {combo_text}",
+                ]
+            )
+        )
+
+
+class CliGameModal(ModalScreen[bool]):
+    BINDINGS = [
+        ("escape", "close", "Close game"),
+        ("j", "move_down", "Move down"),
+        ("k", "move_up", "Move up"),
+    ]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.entries = self._load_entries()
+        self.correct_entry: CliGameEntry | None = None
+        self.options: list[str] = []
+        self.won = False
+        self.answered = False
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="games-modal"):
+            yield Label("cli", id="games-modal-title")
+            yield Label("Pick the best hacker tool for the scenario", id="games-modal-subtitle")
+            yield Label("", id="cli-game-question")
+            with Vertical(classes="pane-box"):
+                yield ListView(id="cli-game-options")
+            yield Label("", id="cli-game-result")
+            yield Label("", id="cli-game-details")
+
+    def on_mount(self) -> None:
+        self._start_round()
+
+    def action_close(self) -> None:
+        self.dismiss(self.won)
+
+    def action_move_down(self) -> None:
+        options = self.query_one("#cli-game-options", ListView)
+        move = getattr(options, "action_cursor_down", None)
+        if move:
+            move()
+
+    def action_move_up(self) -> None:
+        options = self.query_one("#cli-game-options", ListView)
+        move = getattr(options, "action_cursor_up", None)
+        if move:
+            move()
+
+    def _load_entries(self) -> list[CliGameEntry]:
+        candidate_files = [
+            Path(__file__).with_name("cli_game.json"),
+            Path(sysconfig.get_path("data")) / "cli_game.json",
+            Path.cwd() / "cli_game.json",
+        ]
+        game_file = next((path for path in candidate_files if path.exists()), None)
+        if game_file is None:
+            raise FileNotFoundError(
+                "Could not find cli_game.json. Checked: "
+                + ", ".join(str(path) for path in candidate_files)
+            )
+        raw_entries = json.loads(game_file.read_text(encoding="utf-8"))
+        return [CliGameEntry(**entry) for entry in raw_entries]
+
+    def _start_round(self) -> None:
+        self.won = False
+        self.answered = False
+        self.correct_entry = choice(self.entries)
+        wrong_entries = sample(
+            [entry for entry in self.entries if entry.tool != self.correct_entry.tool],
+            k=2,
+        )
+        self.options = [self.correct_entry.tool, *(entry.tool for entry in wrong_entries)]
+        shuffle(self.options)
+        prompt = choice(self.correct_entry.matches)
+
+        question = self.query_one("#cli-game-question", Label)
+        result = self.query_one("#cli-game-result", Label)
+        details = self.query_one("#cli-game-details", Label)
+        options = self.query_one("#cli-game-options", ListView)
+
+        question.update(f"Scenario: {prompt}")
+        result.update("Pick one option and press Enter")
+        details.update("")
+        options.clear()
+        for option in self.options:
+            options.append(ListItem(Label(option)))
+        options.focus()
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        if event.list_view.id != "cli-game-options" or self.answered:
+            return
+        index = event.list_view.index
+        if index is None or self.correct_entry is None:
+            return
+        selected_tool = self.options[index]
+        if selected_tool == self.correct_entry.tool:
+            result_text = "✅ Success — you won!"
+            self.won = True
+        else:
+            result_text = "❌ Failed — wrong choice."
+            self.won = False
+        self.answered = True
+        result = self.query_one("#cli-game-result", Label)
+        result.update(f"{result_text} Press Esc to close.")
+        self._show_explanation()
+
+    def _show_explanation(self) -> None:
+        if self.correct_entry is None:
+            return
+        details = self.query_one("#cli-game-details", Label)
+        combo_text = ", ".join(self.correct_entry.combo)
+        details.update(
+            "\n".join(
+                [
+                    f"Why this tool: {self.correct_entry.flags_and_protocol}",
                     f"Red team: {self.correct_entry.red_team}",
                     f"Blue team: {self.correct_entry.blue_team}",
                     f"Combos: {combo_text}",
@@ -628,6 +757,22 @@ class TodoApp(App):
         color: #f0f0f0;
     }
     #nmap-game-details {
+        margin-top: 1;
+        color: #a0a0a0;
+        text-wrap: wrap;
+        width: 100%;
+    }
+    #cli-game-question {
+        color: #d0d0d0;
+        margin: 1 0;
+        text-wrap: wrap;
+        width: 100%;
+    }
+    #cli-game-result {
+        margin-top: 1;
+        color: #f0f0f0;
+    }
+    #cli-game-details {
         margin-top: 1;
         color: #a0a0a0;
         text-wrap: wrap;
@@ -1174,19 +1319,25 @@ class TodoApp(App):
         self._open_game(selected_game)
 
     def _open_random_game(self) -> None:
-        self._open_game(choice(["ipv4", "nmap"]))
+        self._open_game(choice(["ipv4", "nmap", "cli"]))
 
     def _open_game(self, selected_game: str | None) -> None:
         if selected_game == "ipv4":
             self.push_screen(IPv4GameModal(), callback=self._handle_ipv4_complete)
         elif selected_game == "nmap":
             self.push_screen(NmapGameModal(), callback=self._handle_nmap_complete)
+        elif selected_game == "cli":
+            self.push_screen(CliGameModal(), callback=self._handle_cli_complete)
 
     def _handle_ipv4_complete(self, success: bool | None) -> None:
         if success and self.keep_game_dialog_open_after_complete:
             self.push_screen(GamesModal(), callback=self._handle_game_selection)
 
     def _handle_nmap_complete(self, success: bool | None) -> None:
+        if success and self.keep_game_dialog_open_after_complete:
+            self.push_screen(GamesModal(), callback=self._handle_game_selection)
+
+    def _handle_cli_complete(self, success: bool | None) -> None:
         if success and self.keep_game_dialog_open_after_complete:
             self.push_screen(GamesModal(), callback=self._handle_game_selection)
 
