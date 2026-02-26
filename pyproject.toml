@@ -17,4 +17,4 @@ build-backend = "setuptools.build_meta"
 py-modules = ["main", "db"]
 
 [tool.setuptools.data-files]
-"." = ["nmap_game.json"]
+"." = ["nmap_game.json", "cli_game.json"]
