@@ -212,6 +212,7 @@ class GamesModal(ModalScreen[str | None]):
             with Vertical(classes="pane-box"):
                 with ListView(id="games-list"):
                     yield ListItem(Label("ipv4"))
+                    yield ListItem(Label("type ipv4"))
                     yield ListItem(Label("nmap"))
                     yield ListItem(Label("cli"))
 
@@ -241,7 +242,7 @@ class GamesModal(ModalScreen[str | None]):
             self.dismiss(None)
             return
 
-        game_names = ["ipv4", "nmap", "cli"]
+        game_names = ["ipv4", "type ipv4", "nmap", "cli"]
         if 0 <= index < len(game_names):
             self.dismiss(game_names[index])
             return
@@ -345,6 +346,63 @@ class IPv4GameModal(ModalScreen[bool]):
         if self._blink_end_timer:
             self._blink_end_timer.stop()
             self._blink_end_timer = None
+
+
+class TypeIPv4GameModal(ModalScreen[bool]):
+    BINDINGS = [("escape", "close", "Close game")]
+    MAX_ATTEMPTS = 3
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.current_ip = ""
+        self.attempts = 0
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="games-modal"):
+            yield Label("type ipv4", id="games-modal-title")
+            yield Label("Type the IP address and press Enter", id="ipv4-game-status")
+            yield Label("", id="ipv4-game-ip")
+            yield Input(placeholder="Type the IP and press Enter", id="ipv4-game-input")
+
+    def on_mount(self) -> None:
+        self.start_round()
+
+    def action_close(self) -> None:
+        self.dismiss(False)
+
+    def start_round(self) -> None:
+        self.current_ip = ".".join(str(randint(0, 255)) for _ in range(4))
+        self.attempts = 0
+        status = self.query_one("#ipv4-game-status", Label)
+        ip_label = self.query_one("#ipv4-game-ip", Label)
+        input_box = self.query_one("#ipv4-game-input", Input)
+        status.update("Type the IP address shown below")
+        ip_label.update(self.current_ip)
+        input_box.value = ""
+        input_box.disabled = False
+        input_box.focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id != "ipv4-game-input":
+            return
+        typed = event.value.strip()
+        status = self.query_one("#ipv4-game-status", Label)
+        if typed == self.current_ip:
+            status.update("🎉 Congrats! Correct answer.")
+            event.input.disabled = True
+            self.set_timer(1, self._dismiss_success)
+            return
+        self.attempts += 1
+        event.input.value = ""
+        if self.attempts >= self.MAX_ATTEMPTS:
+            status.update(f"Nope — correct IP was {self.current_ip}")
+            event.input.disabled = True
+            self.set_timer(1.25, self.action_close)
+            return
+        status.update("Not quite, try again")
+
+    def _dismiss_success(self) -> None:
+        self.dismiss(True)
 
 
 @dataclass
@@ -1319,11 +1377,13 @@ class TodoApp(App):
         self._open_game(selected_game)
 
     def _open_random_game(self) -> None:
-        self._open_game(choice(["ipv4", "nmap", "cli"]))
+        self._open_game(choice(["ipv4", "type ipv4", "nmap", "cli"]))
 
     def _open_game(self, selected_game: str | None) -> None:
         if selected_game == "ipv4":
             self.push_screen(IPv4GameModal(), callback=self._handle_ipv4_complete)
+        elif selected_game == "type ipv4":
+            self.push_screen(TypeIPv4GameModal(), callback=self._handle_ipv4_complete)
         elif selected_game == "nmap":
             self.push_screen(NmapGameModal(), callback=self._handle_nmap_complete)
         elif selected_game == "cli":
